@@ -69,6 +69,11 @@
     const init = args[1] || {};
     const method = (init.method || 'GET').toUpperCase();
 
+    // Debug: Log ALL POST requests to see what endpoints are being used
+    if (method === 'POST' && url.includes('backend-api')) {
+      console.log('[Revenium] 📡 Backend API POST detected:', url);
+    }
+
     // Match ChatGPT conversation API endpoint (matches /backend-api/conversation or /backend-api/f/conversation)
     const isChat = method === 'POST' && (
       url.includes('/backend-api/conversation') ||
