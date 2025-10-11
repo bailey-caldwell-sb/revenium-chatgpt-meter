@@ -274,6 +274,7 @@ function renderEmptyReports() {
 
   content.innerHTML = `
     <div class="empty-state">
+      <img src="../icons/raccoon_medium.png" alt="Revenium Raccoon" style="width: 100px; height: 100px; margin: 0 auto 16px; display: block; opacity: 0.8;">
       <p>No tagged conversations yet</p>
       <p style="margin-top: 8px; font-size: 12px;">Tag conversations to track costs by category</p>
     </div>
@@ -293,6 +294,7 @@ function renderEmptyState() {
 
   content.innerHTML = `
     <div class="empty-state">
+      <img src="../icons/raccoon_medium.png" alt="Revenium Raccoon" style="width: 100px; height: 100px; margin: 0 auto 16px; display: block; opacity: 0.8;">
       <p>No active session</p>
       <p style="margin-top: 8px; font-size: 12px;">Start a conversation on ChatGPT to see metrics</p>
     </div>
