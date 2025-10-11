@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Revenium Meter</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+      padding: 0;
+    }
+
+    .header {
+      background: rgba(0, 212, 255, 0.1);
+      padding: 16px;
+      border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+    }
+
+    h1 {
+      font-size: 18px;
+      color: #00d4ff;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .content {
+      padding: 16px;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      color: #00ff88;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #00d4ff;
+    }
+
+    .stat-value.cost {
+      color: #00ff88;
+    }
+
+    .messages-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .message-item {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .message-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .message-model {
+      color: #00d4ff;
+      font-weight: 600;
+    }
+
+    .message-cost {
+      color: #00ff88;
+    }
+
+    .message-details {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 11px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    button {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    button.primary {
+      background: #00d4ff;
+      color: #1a1a2e;
+    }
+
+    button.primary:hover {
+      background: #00b8e6;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 13px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 212, 255, 0.3);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 212, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Revenium Meter</h1>
+    <p class="subtitle">ChatGPT usage analytics</p>
+  </div>
+
+  <div class="content" id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p style="margin-top: 12px;">Loading session data...</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
