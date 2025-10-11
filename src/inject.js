@@ -55,19 +55,24 @@
   }
 
   function extractDelta(evt) {
-    // ChatGPT's current streaming format
-    if (evt.type === 'content_block_delta') {
-      return evt.delta?.text || null;
-    }
-
-    // Check for message content in various formats
+    // ChatGPT streaming format - look for message with parts
     if (evt.message?.content?.parts) {
-      return evt.message.content.parts.join('');
+      const parts = evt.message.content.parts;
+      return Array.isArray(parts) ? parts.join('') : parts;
     }
 
-    // Check for delta content (various paths)
+    // Look for message.content directly
+    if (evt.message?.content && typeof evt.message.content === 'string') {
+      return evt.message.content;
+    }
+
+    // Check for delta in various places
     if (evt.delta?.content) {
       return evt.delta.content;
+    }
+
+    if (evt.delta?.text) {
+      return evt.delta.text;
     }
 
     // OpenAI API format
@@ -79,14 +84,42 @@
       return evt.choices[0].text;
     }
 
-    // Try to extract text from any 'text' or 'content' fields
-    if (typeof evt.text === 'string') {
+    // Generic text/content fields
+    if (typeof evt.text === 'string' && evt.text.length > 0) {
       return evt.text;
     }
 
-    if (typeof evt.content === 'string') {
+    if (typeof evt.content === 'string' && evt.content.length > 0) {
       return evt.content;
     }
+
+    // Deep search for 'parts' arrays anywhere in the object
+    function findParts(obj, depth = 0) {
+      if (depth > 3) return null; // Prevent infinite recursion
+      if (!obj || typeof obj !== 'object') return null;
+
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const found = findParts(item, depth + 1);
+          if (found) return found;
+        }
+      } else {
+        if (obj.parts && Array.isArray(obj.parts)) {
+          return obj.parts.join('');
+        }
+        for (const key in obj) {
+          if (key === 'parts' && Array.isArray(obj[key])) {
+            return obj[key].join('');
+          }
+          const found = findParts(obj[key], depth + 1);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    const deepParts = findParts(evt);
+    if (deepParts) return deepParts;
 
     return null;
   }
