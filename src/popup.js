@@ -39,20 +39,27 @@ async function loadDashboardData() {
 
     // If API key exists, fetch OpenAI usage data
     let openaiData = null;
+    let openaiError = null;
     if (apiKey) {
+      console.log('[Revenium] API key found, fetching OpenAI data...');
       try {
         const client = new OpenAIAPIClient(apiKey);
         const monthData = await client.getCurrentMonthUsage();
+        console.log('[Revenium] OpenAI data fetched:', monthData);
         openaiData = {
           usage: parseUsageData(monthData.usage),
           subscription: monthData.subscription
         };
+        console.log('[Revenium] Parsed OpenAI data:', openaiData);
       } catch (error) {
-        console.error('Failed to fetch OpenAI data:', error);
+        console.error('[Revenium] Failed to fetch OpenAI data:', error);
+        openaiError = error.message;
       }
+    } else {
+      console.log('[Revenium] No API key found in settings');
     }
 
-    renderDashboard(sessionData, openaiData);
+    renderDashboard(sessionData, openaiData, openaiError, apiKey);
   } catch (error) {
     console.error('Failed to load dashboard:', error);
     renderEmptyState('Error loading dashboard data.');
@@ -156,7 +163,7 @@ async function testOpenAIAPI() {
 /**
  * Render full dashboard
  */
-function renderDashboard(sessionData, openaiData) {
+function renderDashboard(sessionData, openaiData, openaiError = null, hasApiKey = false) {
   const content = document.getElementById('content');
 
   let html = '';
@@ -211,7 +218,18 @@ function renderDashboard(sessionData, openaiData) {
         ${renderMiniChart(usage.dailyData, 'requests')}
       </div>
     `;
-  } else if (openaiData === null) {
+  } else if (hasApiKey && openaiError) {
+    // API key exists but there was an error
+    html += `
+      <div class="section">
+        <div style="text-align: center; padding: 20px; background: rgba(255, 100, 100, 0.1); border-radius: 8px; border: 1px solid rgba(255, 100, 100, 0.3);">
+          <p style="color: #ff6b6b; margin-bottom: 8px;">⚠️ OpenAI API Error</p>
+          <p style="font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 8px;">${openaiError}</p>
+          <p style="font-size: 11px; color: rgba(255,255,255,0.4);">Check your API key in Settings or view the console for details</p>
+        </div>
+      </div>
+    `;
+  } else if (!hasApiKey) {
     // No API key configured
     html += `
       <div class="section">
