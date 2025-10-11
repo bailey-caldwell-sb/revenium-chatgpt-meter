@@ -58,8 +58,8 @@ const DEFAULT_TAGS = [
   { id: 'acme', name: 'Acme Industries', color: '#ffa500', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } }
 ];
 
-function round4(num) {
-  return Math.round(num * 10000) / 10000;
+function round6(num) {
+  return Math.round(num * 1000000) / 1000000;
 }
 
 /**
@@ -145,10 +145,10 @@ function updateSessionWithFinal(session, metrics) {
   session.reasoningCostUSD = (session.reasoningCostUSD || 0) + reasoningCost;
 
   session.totalCostUSD = session.textCostUSD + session.imageCostUSD + session.reasoningCostUSD;
-  session.totalCostUSD = round4(session.totalCostUSD);
-  session.textCostUSD = round4(session.textCostUSD);
-  session.imageCostUSD = round4(session.imageCostUSD);
-  session.reasoningCostUSD = round4(session.reasoningCostUSD);
+  session.totalCostUSD = round6(session.totalCostUSD);
+  session.textCostUSD = round6(session.textCostUSD);
+  session.imageCostUSD = round6(session.imageCostUSD);
+  session.reasoningCostUSD = round6(session.reasoningCostUSD);
 
   // Track last input cost for next calculation
   session.lastInputCostUSD = textInputCost;
@@ -240,8 +240,15 @@ function summarize(session) {
     model: session.model,
     totalPromptTokens: session.totalPromptTokens,
     totalCompletionTokens: session.totalCompletionTokens,
-    totalTokens: session.totalPromptTokens + session.totalCompletionTokens,
+    totalReasoningTokens: session.totalReasoningTokens || 0,
+    totalTokens: session.totalPromptTokens + session.totalCompletionTokens + (session.totalReasoningTokens || 0),
     totalCostUSD: session.totalCostUSD,
+    textCostUSD: session.textCostUSD || 0,
+    imageCostUSD: session.imageCostUSD || 0,
+    reasoningCostUSD: session.reasoningCostUSD || 0,
+    totalImageInputs: session.totalImageInputs || 0,
+    totalImageOutputs: session.totalImageOutputs || 0,
+    hasMultimodal: (session.totalImageInputs || 0) > 0 || (session.totalImageOutputs || 0) > 0 || (session.totalReasoningTokens || 0) > 0,
     messageCount: session.perMessage.length,
     lastUpdatedAt: session.lastUpdatedAt,
     tagId: session.tagId,

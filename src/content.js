@@ -59,15 +59,15 @@
     }
   }
 
-  function round4(num) {
-    return Math.round(num * 10000) / 10000;
+  function round6(num) {
+    return Math.round(num * 1000000) / 1000000;
   }
 
   function computeCost(model, inTok, outTok) {
     const pricing = pricingTable.find(p => model?.startsWith(p.modelPrefix)) || pricingTable[0];
     const inputCost = (inTok / 1000) * pricing.inputPerK;
     const outputCost = (outTok / 1000) * pricing.outputPerK;
-    return round4(inputCost + outputCost);
+    return round6(inputCost + outputCost);
   }
 
   function computeMultimodalCost(model, metrics) {
@@ -86,14 +86,14 @@
     const reasoningCost = (reasoningTokens / 1000) * pricing.outputPerK; // Reasoning billed as output
 
     return {
-      textCost: round4(inputCost + outputCost),
-      imageCost: round4(imageInputCost + imageOutputCost),
-      reasoningCost: round4(reasoningCost),
-      totalCost: round4(inputCost + outputCost + imageInputCost + imageOutputCost + reasoningCost),
-      inputCostUSD: round4(inputCost),
-      outputCostUSD: round4(outputCost),
-      imageCostUSD: round4(imageInputCost + imageOutputCost),
-      reasoningCostUSD: round4(reasoningCost)
+      textCost: round6(inputCost + outputCost),
+      imageCost: round6(imageInputCost + imageOutputCost),
+      reasoningCost: round6(reasoningCost),
+      totalCost: round6(inputCost + outputCost + imageInputCost + imageOutputCost + reasoningCost),
+      inputCostUSD: round6(inputCost),
+      outputCostUSD: round6(outputCost),
+      imageCostUSD: round6(imageInputCost + imageOutputCost),
+      reasoningCostUSD: round6(reasoningCost)
     };
   }
 
@@ -245,6 +245,19 @@
         .kpi-label { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
         .kpi-value { font-size: 20px; font-weight: 700; color: #00d4ff; }
         .kpi-value.cost { color: #00ff88; }
+        .multimodal-indicators {
+          display: flex; gap: 8px; margin-top: 8px;
+          font-size: 11px; color: rgba(255,255,255,0.6);
+        }
+        .multimodal-indicator {
+          display: flex; align-items: center; gap: 4px;
+          background: rgba(255,255,255,0.05); padding: 4px 8px;
+          border-radius: 4px;
+        }
+        .cost-breakdown {
+          font-size: 10px; color: rgba(255,255,255,0.4);
+          margin-top: 6px; line-height: 1.4;
+        }
         .latest {
           font-size: 11px; color: rgba(255,255,255,0.5);
           margin-top: 8px; padding-top: 8px;
@@ -282,11 +295,20 @@
         <div class="kpi">
           <div class="kpi-item">
             <div class="kpi-label">Cost</div>
-            <div class="kpi-value cost js-cost">$0.0000</div>
+            <div class="kpi-value cost js-cost">$0.000000</div>
+            <div class="cost-breakdown js-cost-breakdown"></div>
           </div>
           <div class="kpi-item">
             <div class="kpi-label">Tokens</div>
             <div class="kpi-value js-tokens">0</div>
+          </div>
+        </div>
+        <div class="multimodal-indicators js-multimodal" style="display: none;">
+          <div class="multimodal-indicator js-images" style="display: none;">
+            📷 <span class="js-image-count">0</span>
+          </div>
+          <div class="multimodal-indicator js-reasoning" style="display: none;">
+            🧠 reasoning
           </div>
         </div>
         <div class="latest">
@@ -418,18 +440,68 @@
     const tokensEl = shadowRoot.querySelector('.js-tokens');
     const latestEl = shadowRoot.querySelector('.js-latest');
     const modelEl = shadowRoot.querySelector('.js-model');
+    const costBreakdownEl = shadowRoot.querySelector('.js-cost-breakdown');
+    const multimodalEl = shadowRoot.querySelector('.js-multimodal');
+    const imagesEl = shadowRoot.querySelector('.js-images');
+    const imageCountEl = shadowRoot.querySelector('.js-image-count');
+    const reasoningEl = shadowRoot.querySelector('.js-reasoning');
 
     if (data.type === 'reset') {
-      costEl.textContent = '$0.0000';
+      costEl.textContent = '$0.000000';
       tokensEl.textContent = '0';
       latestEl.textContent = '-';
       modelEl.textContent = '-';
+      costBreakdownEl.textContent = '';
+      multimodalEl.style.display = 'none';
+      imagesEl.style.display = 'none';
+      reasoningEl.style.display = 'none';
       return;
     }
 
     if (data.totals) {
-      costEl.textContent = `$${data.totals.totalCostUSD.toFixed(4)}`;
+      costEl.textContent = `$${data.totals.totalCostUSD.toFixed(6)}`;
       tokensEl.textContent = `${data.totals.totalTokens || 0}`;
+
+      // Show cost breakdown if multimodal
+      if (data.totals.hasMultimodal) {
+        const breakdown = [];
+        if (data.totals.textCostUSD > 0) {
+          breakdown.push(`Text: $${data.totals.textCostUSD.toFixed(6)}`);
+        }
+        if (data.totals.imageCostUSD > 0) {
+          breakdown.push(`Images: $${data.totals.imageCostUSD.toFixed(6)}`);
+        }
+        if (data.totals.reasoningCostUSD > 0) {
+          breakdown.push(`Reasoning: $${data.totals.reasoningCostUSD.toFixed(6)}`);
+        }
+        costBreakdownEl.textContent = breakdown.join(' | ');
+      } else {
+        costBreakdownEl.textContent = '';
+      }
+
+      // Show multimodal indicators
+      const hasImages = (data.totals.totalImageInputs || 0) > 0 || (data.totals.totalImageOutputs || 0) > 0;
+      const hasReasoning = (data.totals.totalReasoningTokens || 0) > 0;
+
+      if (hasImages || hasReasoning) {
+        multimodalEl.style.display = 'flex';
+
+        if (hasImages) {
+          const totalImages = (data.totals.totalImageInputs || 0) + (data.totals.totalImageOutputs || 0);
+          imageCountEl.textContent = totalImages;
+          imagesEl.style.display = 'flex';
+        } else {
+          imagesEl.style.display = 'none';
+        }
+
+        if (hasReasoning) {
+          reasoningEl.style.display = 'flex';
+        } else {
+          reasoningEl.style.display = 'none';
+        }
+      } else {
+        multimodalEl.style.display = 'none';
+      }
 
       // Update tag display if session has tag info
       if (data.totals.tagId) {

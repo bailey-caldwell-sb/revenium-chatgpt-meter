@@ -115,6 +115,43 @@ function renderSession(sessionData) {
     </div>
   ` : '';
 
+  // Build multimodal section if applicable
+  let multimodalSection = '';
+  if (sessionData.hasMultimodal) {
+    const breakdownParts = [];
+    if (sessionData.textCostUSD > 0) {
+      breakdownParts.push(`Text: $${sessionData.textCostUSD.toFixed(6)}`);
+    }
+    if (sessionData.imageCostUSD > 0) {
+      breakdownParts.push(`Images: $${sessionData.imageCostUSD.toFixed(6)}`);
+    }
+    if (sessionData.reasoningCostUSD > 0) {
+      breakdownParts.push(`Reasoning: $${sessionData.reasoningCostUSD.toFixed(6)}`);
+    }
+
+    const multimodalStats = [];
+    if (sessionData.totalImageInputs || sessionData.totalImageOutputs) {
+      multimodalStats.push(`📷 ${sessionData.totalImageInputs + sessionData.totalImageOutputs} images (${sessionData.totalImageInputs} in, ${sessionData.totalImageOutputs} out)`);
+    }
+    if (sessionData.totalReasoningTokens > 0) {
+      multimodalStats.push(`🧠 ~${sessionData.totalReasoningTokens.toLocaleString()} reasoning tokens`);
+    }
+
+    multimodalSection = `
+      <div class="section" style="margin-top: 12px;">
+        <div class="section-title">Cost Breakdown</div>
+        <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">
+          ${breakdownParts.join(' | ')}
+        </p>
+        ${multimodalStats.length > 0 ? `
+          <p style="font-size: 12px; color: rgba(255,255,255,0.6);">
+            ${multimodalStats.join(' • ')}
+          </p>
+        ` : ''}
+      </div>
+    `;
+  }
+
   const html = `
     <div class="section">
       <div class="section-title">
@@ -124,7 +161,7 @@ function renderSession(sessionData) {
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Cost</div>
-          <div class="stat-value cost">$${sessionData.totalCostUSD.toFixed(4)}</div>
+          <div class="stat-value cost">$${sessionData.totalCostUSD.toFixed(6)}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Tokens</div>
@@ -136,6 +173,8 @@ function renderSession(sessionData) {
         </div>
       </div>
     </div>
+
+    ${multimodalSection}
 
     <div class="button-group">
       <button id="refresh-btn">Refresh</button>
@@ -182,7 +221,7 @@ function renderReports(report) {
             <span class="tag-dot" style="background: ${item.color};"></span>
             <span class="tag-name">${item.name}</span>
           </div>
-          <div class="report-cost">$${item.totalCost.toFixed(4)}</div>
+          <div class="report-cost">$${item.totalCost.toFixed(6)}</div>
         </div>
         <div class="report-details">
           <div class="report-stat">${item.totalTokens.toLocaleString()} tokens</div>
@@ -202,7 +241,7 @@ function renderReports(report) {
       <div class="stats-grid" style="margin-bottom: 16px;">
         <div class="stat-card">
           <div class="stat-label">Total Cost</div>
-          <div class="stat-value cost">$${totalCost.toFixed(4)}</div>
+          <div class="stat-value cost">$${totalCost.toFixed(6)}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Total Tokens</div>
