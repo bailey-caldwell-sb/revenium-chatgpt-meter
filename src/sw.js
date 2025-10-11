@@ -49,8 +49,6 @@ function ensureSession(tabId, metrics) {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalCostUSD: 0,
-      contextLimit: metrics?.contextLimit || 8192,
-      contextUsagePercent: 0,
       lastUpdatedAt: Date.now(),
       perMessage: []
     });
@@ -71,11 +69,6 @@ function updateSessionWithFinal(session, metrics) {
 
   // Output tokens = accumulate all assistant responses
   session.totalCompletionTokens += metrics.completionTokens || 0;
-
-  // Context window tracking
-  session.contextLimit = metrics.contextLimit || session.contextLimit || 8192;
-  const totalTokens = session.totalPromptTokens + session.totalCompletionTokens;
-  session.contextUsagePercent = Math.round((totalTokens / session.contextLimit) * 100);
 
   // Total cost = latest input cost + cumulative output cost
   const cumulativeOutputCost = (session.totalCostUSD || 0) - (session.lastInputCostUSD || 0);
@@ -157,8 +150,6 @@ function summarize(session) {
     totalCompletionTokens: session.totalCompletionTokens,
     totalTokens: session.totalPromptTokens + session.totalCompletionTokens,
     totalCostUSD: session.totalCostUSD,
-    contextLimit: session.contextLimit,
-    contextUsagePercent: session.contextUsagePercent,
     messageCount: session.perMessage.length,
     lastUpdatedAt: session.lastUpdatedAt
   };

@@ -61,10 +61,6 @@ function renderSession(sessionData) {
           <div class="stat-value">${sessionData.totalTokens || 0}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Context Used</div>
-          <div class="stat-value">${sessionData.contextUsagePercent || 0}%</div>
-        </div>
-        <div class="stat-card">
           <div class="stat-label">Model</div>
           <div class="stat-value" style="font-size: 14px;">${sessionData.model || 'N/A'}</div>
         </div>
