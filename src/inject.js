@@ -272,14 +272,26 @@
             buffer = parts.pop() || '';
 
             for (const part of parts) {
-              if (!part.startsWith('data:')) continue;
-              const json = part.slice(5).trim();
-              if (json === '[DONE]') continue;
+              // Parse SSE format: "event: delta\ndata: {...}"
+              const lines = part.split('\n');
+              let eventType = null;
+              let data = null;
+
+              for (const line of lines) {
+                if (line.startsWith('event:')) {
+                  eventType = line.slice(6).trim();
+                } else if (line.startsWith('data:')) {
+                  data = line.slice(5).trim();
+                }
+              }
+
+              // Skip if no data or if it's [DONE]
+              if (!data || data === '[DONE]') continue;
 
               eventCount++;
 
               try {
-                const evt = JSON.parse(json);
+                const evt = JSON.parse(data);
 
                 // Debug: Log all unique event types we see (with full structure for first few)
                 if (!window.__revenium_seen_types) {
@@ -299,7 +311,14 @@
                   window.__revenium_event_count++;
                 }
 
-                const delta = extractDelta(evt);
+                // Handle SSE delta events: {p: "", o: "add", v: {message: {...}}}
+                let messageToExtract = evt;
+                if (eventType === 'delta' && evt.v?.message) {
+                  messageToExtract = { input_message: evt.v.message };
+                  console.log('[Revenium] 🔄 Delta event detected, extracting from v.message');
+                }
+
+                const delta = extractDelta(messageToExtract);
                 if (delta) {
                   assistantText += delta;
                   console.log('[Revenium] 📝 ✅ SUCCESS! Captured delta text:', delta.substring(0, 50));
