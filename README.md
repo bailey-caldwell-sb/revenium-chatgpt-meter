@@ -1,8 +1,8 @@
-# Revenium ChatGPT Live Meter
+# Revenium ChatGPT Meter
 
-**Real-time cost, token, and latency tracking for ChatGPT conversations**
+**Real-time cost, token, and usage tracking for ChatGPT conversations**
 
-A Chrome Extension (Manifest V3) that provides live visibility into your ChatGPT usage metrics including token counts, costs, and response latency.
+A Chrome Extension (Manifest V3) that provides live visibility into your ChatGPT usage metrics including token counts, estimated costs, context window usage, and response latency.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Manifest](https://img.shields.io/badge/manifest-v3-green)
@@ -14,25 +14,26 @@ A Chrome Extension (Manifest V3) that provides live visibility into your ChatGPT
 
 ### Real-Time Metrics
 - **Live Token Counting**: Track input and output tokens as messages stream
-- **Cost Calculation**: Automatic cost computation based on configurable pricing
+- **Cost Estimation**: Automatic cost computation based on configurable pricing
+- **Context Window Tracking**: Monitor how much of your model's context window is being used
 - **Latency Tracking**: Measure Time to First Byte (TTFB) and total response time
-- **Session Totals**: Cumulative metrics per conversation
+- **Session Totals**: Cumulative metrics across entire conversations
 
 ### Smart Monitoring
-- **Fetch Patching**: Intercepts ChatGPT API calls without DevTools
-- **Streaming Support**: Works with Server-Sent Events (SSE) responses
-- **Multi-Model Support**: GPT-4, GPT-3.5, O1, and custom models
+- **Fetch Interception**: Captures ChatGPT API calls using Manifest V3's `world: "MAIN"` injection
+- **SSE Streaming Support**: Parses Server-Sent Events format used by ChatGPT
+- **Multi-Model Support**: GPT-4, GPT-4o, GPT-3.5, O1, and more
 - **Session Management**: Per-tab session isolation with automatic persistence
 
 ### User Interface
-- **Overlay Panel**: Non-intrusive floating panel on ChatGPT pages
-- **Popup Dashboard**: Quick access to session summary and recent messages
+- **Overlay Panel**: Non-intrusive floating panel on ChatGPT pages showing real-time metrics
+- **Popup Dashboard**: Quick access to current session summary
 - **Settings Page**: Customize pricing, UI preferences, and privacy controls
 
 ### Privacy-First Design
 - **Local Storage Only**: All data stays on your device
 - **No Telemetry**: Zero external data collection
-- **Redaction Options**: Optional user text redaction for privacy
+- **Optional History**: Control what gets stored
 
 ---
 
@@ -55,7 +56,7 @@ A Chrome Extension (Manifest V3) that provides live visibility into your ChatGPT
    - Select the `revenium-chatgpt-meter` directory
 
 4. **Verify installation:**
-   - You should see "Revenium ChatGPT Live Meter" in your extensions list
+   - You should see "Revenium ChatGPT Meter" in your extensions list
    - The extension icon will appear in your toolbar
 
 ---
@@ -68,29 +69,31 @@ A Chrome Extension (Manifest V3) that provides live visibility into your ChatGPT
    - Navigate to [chat.openai.com](https://chat.openai.com) or [chatgpt.com](https://chatgpt.com)
 
 2. **Start a conversation:**
-   - The Revenium Meter overlay will appear automatically (top-right by default)
+   - The Revenium Meter overlay will appear automatically in the top-right corner
    - Metrics update in real-time as messages are sent and received
 
 3. **View metrics:**
-   - **Overlay**: Shows current session cost, tokens, and latest latency
-   - **Popup**: Click extension icon for detailed session breakdown
+   - **Overlay**: Shows current session cost, tokens, context usage, and model
+   - **Popup**: Click extension icon for session summary
    - **Options**: Right-click extension icon → Options for settings
 
 ### Overlay Panel
 
 The overlay displays:
-- **Cost**: Total session cost in USD (configurable pricing)
+- **Cost**: Total session cost in USD (based on configurable pricing)
 - **Tokens**: Total input + output tokens
-- **Latest**: Most recent message latency (TTFB shown if enabled)
+- **Context Window**: Percentage of model's context window used (color-coded: green < 70%, orange 70-90%, red > 90%)
+- **Latest**: Most recent message info
 - **Model**: Current model being used
 - **Reset Button**: Clear current session metrics
 
 ### Popup Dashboard
 
 Access via extension icon:
-- **Session Summary**: Total cost, tokens (input/output)
-- **Recent Messages**: Last 10 messages with individual metrics
-- **Actions**: Reset session or open settings
+- **Current Session**: Total cost, tokens, context usage, and model
+- **Refresh**: Reload current session data
+- **Reset Session**: Clear current conversation metrics
+- **Settings**: Access configuration page
 
 ---
 
@@ -133,43 +136,53 @@ Configure per-model pricing in Options:
 #### 1. **Service Worker** (`src/sw.js`)
 - Session state management
 - Storage persistence
-- Cross-tab message handling
+- Message handling between components
 - Daily history aggregation
 
-#### 2. **Content Script** (`src/content.js`)
-- Fetch API patching
-- SSE stream interception
-- Real-time tokenization
-- Overlay UI injection
+#### 2. **Inject Script** (`src/inject.js`)
+- Runs in page context (`world: "MAIN"`)
+- Patches `window.fetch()` to intercept ChatGPT API calls
+- Parses SSE streaming responses
+- Extracts tokens from request/response
+- Calculates context window usage
 
-#### 3. **Meter Core** (`src/meter-core.js`)
-- Tokenization engine (with fallback)
-- Cost calculation logic
-- Message parsing utilities
-- Pricing table management
+#### 3. **Content Script** (`src/content.js`)
+- Creates overlay UI using Shadow DOM
+- Listens for metrics from inject script
+- Sends data to service worker
+- Updates overlay in real-time
 
 #### 4. **UI Components**
 - **Overlay**: Shadow DOM panel on ChatGPT pages
-- **Popup**: Session dashboard (popup.html)
-- **Options**: Settings page (options.html)
+- **Popup**: Session dashboard (popup.html/js)
+- **Options**: Settings page (options.html/js)
 
 ### Data Flow
 
 ```
 ChatGPT Request
     ↓
-Patched fetch() intercepts
+inject.js intercepts fetch()
     ↓
-Parse request → Count input tokens
+Parse request body → Extract input messages → Count tokens
     ↓
-Stream response → Count output tokens (throttled)
+Stream SSE response → Parse delta events → Extract assistant text
     ↓
-Calculate costs → Update overlay
+Count output tokens → Calculate costs → Compute context usage
     ↓
-Send to Service Worker → Persist session
+Dispatch custom events → content.js receives
     ↓
-Update popup dashboard
+Send to service worker → Update session state → Persist
+    ↓
+Update overlay UI
 ```
+
+### Key Technical Details
+
+- **Manifest V3 Injection**: Uses `world: "MAIN"` to run in page context and bypass CSP
+- **SSE Parsing**: Handles `event: delta` format with `v.message.content.parts` structure
+- **Token Accumulation**: Input tokens replace (full history), output tokens accumulate
+- **Context Windows**: Tracks limits per model (GPT-4: 8K-128K, etc.)
 
 ---
 
@@ -181,33 +194,26 @@ The extension uses a **simplified fallback tokenizer** (4:1 char-to-token ratio)
 
 **⚠️ This is NOT accurate for production use.**
 
-### Adding Real Tiktoken
+### Token Counting Logic
+
+```javascript
+// Input tokens: Full conversation history (replaces each time)
+session.totalPromptTokens = metrics.promptTokens;
+
+// Output tokens: Accumulate all assistant responses
+session.totalCompletionTokens += metrics.completionTokens;
+
+// Total = Input + Output
+totalTokens = totalPromptTokens + totalCompletionTokens;
+```
+
+### Future Enhancement: Real Tiktoken
 
 For accurate token counts, integrate `@dqbd/tiktoken`:
 
-1. **Install package:**
-   ```bash
-   npm install @dqbd/tiktoken
-   ```
-
-2. **Bundle for browser:**
-   ```bash
-   npx esbuild node_modules/@dqbd/tiktoken/dist/tiktoken.js \
-     --bundle --outfile=src/vendor/tiktoken.min.js --format=esm
-   ```
-
-3. **Copy WASM:**
-   ```bash
-   cp node_modules/@dqbd/tiktoken/tiktoken_bg.wasm src/vendor/
-   ```
-
-4. **Update `meter-core.js`** (see `src/vendor/tiktoken-info.md` for details)
-
-### Supported Encodings
-
-- `cl100k_base`: GPT-4, GPT-3.5, Ada
-- `p50k_base`: Codex, Davinci
-- `o200k_base`: GPT-4o, O1 models
+1. Install package: `npm install @dqbd/tiktoken`
+2. Bundle for browser with esbuild
+3. Update inject.js to use real tokenizer
 
 ---
 
@@ -224,21 +230,10 @@ For accurate token counts, integrate `@dqbd/tiktoken`:
   "totalPromptTokens": 1500,
   "totalCompletionTokens": 800,
   "totalCostUSD": 0.093,
+  "contextLimit": 8192,
+  "contextUsagePercent": 28,
   "lastUpdatedAt": 1703001234567,
-  "perMessage": [
-    {
-      "id": "uuid",
-      "model": "gpt-4",
-      "promptTokens": 150,
-      "completionTokens": 80,
-      "inputCostUSD": 0.0045,
-      "outputCostUSD": 0.0048,
-      "totalCostUSD": 0.0093,
-      "latencyMs": 2340,
-      "ttfbMs": 450,
-      "status": "ok"
-    }
-  ]
+  "perMessage": [...]
 }
 ```
 
@@ -262,66 +257,34 @@ For accurate token counts, integrate `@dqbd/tiktoken`:
 
 ---
 
-## 🧪 Testing Checklist
-
-- [ ] Streamed responses: Correct TTFB and total latency
-- [ ] Token counts match OpenAI's tokenizer tool
-- [ ] Costs align with configured pricing
-- [ ] Model switching mid-conversation
-- [ ] Error handling (network failures, rate limits)
-- [ ] Multiple tabs maintain separate sessions
-- [ ] Overlay doesn't interfere with ChatGPT UI
-- [ ] Storage caps and pruning work correctly
-- [ ] Privacy redaction mode (no text stored)
-
-### Test URLs
-
-- **Tokenizer Comparison**: https://platform.openai.com/tokenizer
-- **ChatGPT**: https://chat.openai.com
-
----
-
-## 🛡️ Security & Privacy
-
-### Local-Only Operation
-- All data stored in `chrome.storage.local`
-- No external API calls (except ChatGPT itself)
-- No telemetry or analytics
-
-### Shadow DOM Isolation
-- UI injected via Shadow DOM for style isolation
-- No interference with ChatGPT's DOM
-
-### Content Security Policy
-- No remote script loading
-- WASM loaded from extension resources
-- Strict CSP compliance
-
----
-
 ## 🐛 Troubleshooting
 
 ### Metrics Not Updating
-1. Refresh the ChatGPT page
-2. Check browser console for errors
-3. Verify extension is enabled
-4. Try reloading the extension
+
+1. **Reload the extension**: Go to `chrome://extensions/` and click refresh
+2. **Reload ChatGPT page**: Press F5 or Cmd+R
+3. **Check console**: Look for `[Revenium]` messages
+4. **Verify injection**: Should see overlay appear after 3 seconds
 
 ### Inaccurate Token Counts
-- Currently using fallback tokenizer (4:1 ratio)
-- Install real tiktoken for accuracy (see Tokenization section)
-- Compare with OpenAI's tokenizer tool
+
+- Currently using approximate 4:1 character-to-token ratio
+- For more accuracy, compare with OpenAI's tokenizer tool
+- Real tiktoken integration recommended for production
 
 ### Overlay Not Visible
+
 1. Check if overlay position is off-screen (try changing in Options)
 2. Look for browser console errors
-3. Verify content script injection
-4. Try toggling compact mode
+3. Try refreshing the ChatGPT page
+4. Verify extension is enabled
 
 ### Cost Calculations Wrong
-1. Verify pricing in Options matches your expected rates
+
+1. Verify pricing in Options matches expected rates
 2. Check model prefix matching (case-sensitive)
 3. Ensure correct encoding is set
+4. Note: Costs are estimates based on token approximation
 
 ---
 
@@ -331,60 +294,49 @@ For accurate token counts, integrate `@dqbd/tiktoken`:
 
 ```
 revenium-chatgpt-meter/
-├── manifest.json              # Extension manifest
+├── manifest.json              # Extension manifest (MV3)
 ├── src/
-│   ├── sw.js                 # Service worker
-│   ├── content.js            # Content script (fetch patching + overlay)
-│   ├── meter-core.js         # Core logic (tokenization, pricing)
+│   ├── sw.js                 # Service worker (session management)
+│   ├── inject.js             # Page context script (fetch interception)
+│   ├── content.js            # Content script (overlay UI)
 │   ├── popup.html/js         # Popup dashboard
 │   ├── options.html/js       # Settings page
-│   └── vendor/
-│       └── tiktoken-info.md  # Tokenizer integration guide
-├── icons/                     # Extension icons
-└── README.md
+│   └── icons/                # Extension icons
+├── README.md
+└── LICENSE
 ```
 
-### Building Icons
+### Recent Changes
 
-Generate icons at 16x16, 32x32, 48x48, and 128x128 pixels.
-
-**Using ImageMagick:**
-```bash
-convert -size 128x128 xc:#00d4ff -fill white -pointsize 80 \
-  -gravity center -annotate +0+0 'R' icons/icon128.png
-convert icons/icon128.png -resize 48x48 icons/icon48.png
-convert icons/icon128.png -resize 32x32 icons/icon32.png
-convert icons/icon128.png -resize 16x16 icons/icon16.png
-```
-
-### Debug Mode
-
-Enable debug logging:
-```javascript
-// Add to meter-core.js
-window.REVENIUM_DEBUG = true;
-```
+**v1.0.0** - Production-ready release
+- Removed OpenAI API integration (CORS restrictions)
+- Added context window tracking with visual progress bar
+- Fixed SSE delta event parsing for ChatGPT's current format
+- Cleaned up all debug logging
+- Simplified popup to show session metrics only
+- Fixed token accumulation logic (input replaces, output accumulates)
 
 ---
 
 ## 🚧 Known Limitations
 
-1. **Tokenization**: Currently uses approximate fallback (not production-ready)
+1. **Tokenization**: Uses approximate 4:1 ratio (not production-accurate)
 2. **API Changes**: ChatGPT's internal API may change without notice
-3. **Browser Support**: Chrome/Chromium only (MV3)
-4. **Streaming Formats**: Assumes SSE format (may break if OpenAI changes)
+3. **Browser Support**: Chrome/Chromium only (Manifest V3)
+4. **SSE Format**: Assumes current `event: delta` format
+5. **Model Detection**: Relies on request body containing model info
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Integrate real tiktoken WASM
+- [ ] Integrate real tiktoken WASM for accurate token counting
 - [ ] Export metrics (CSV/JSON)
-- [ ] Charts and visualizations
+- [ ] Charts and visualizations for usage trends
 - [ ] Firefox support (WebExtensions API)
 - [ ] Cost budgets and alerts
-- [ ] Multi-conversation aggregation
-- [ ] Dark/light theme support
+- [ ] Multi-conversation aggregation view
+- [ ] Enhanced model detection (handle API changes)
 
 ---
 
@@ -401,7 +353,7 @@ Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Test thoroughly (especially ChatGPT integration)
 5. Submit a pull request
 
 ---
@@ -415,9 +367,10 @@ Contributions welcome! Please:
 
 ## 🙏 Acknowledgments
 
-- Built on the Chrome Extension Manifest V3 platform
+- Built on Chrome Extension Manifest V3 platform
 - Inspired by the need for transparent AI cost tracking
-- Tokenization powered by tiktoken (when integrated)
+- Uses Shadow DOM for clean UI injection
+- SSE parsing adapted for ChatGPT's current API format
 
 ---
 
