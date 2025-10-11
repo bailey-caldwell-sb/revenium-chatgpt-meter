@@ -55,7 +55,16 @@
   }
 
   function extractDelta(evt) {
-    // ChatGPT streaming format - look for message with parts
+    // ChatGPT streaming format - input_message or message with content.parts
+    if (evt.input_message?.content?.parts) {
+      const parts = evt.input_message.content.parts;
+      // Only extract if it's from assistant (not user input)
+      if (evt.input_message.author?.role !== 'user') {
+        return Array.isArray(parts) ? parts.join('') : parts;
+      }
+    }
+
+    // Standard message format
     if (evt.message?.content?.parts) {
       const parts = evt.message.content.parts;
       return Array.isArray(parts) ? parts.join('') : parts;
@@ -192,10 +201,14 @@
         let assistantText = '';
         let firstByte = false;
         let tTFB = null;
+        let chunkCount = 0;
+        let eventCount = 0;
 
         const model = reqBody?.model || 'gpt-4';
         const inputText = serializeMessages(reqBody?.messages || []);
         const inputTokens = encodeForModel(inputText).length;
+
+        console.log('[Revenium] 🎬 Starting stream reading...', { model, inputTokens });
 
         try {
           while (true) {
@@ -212,6 +225,19 @@
               const totalTokens = inputTokens + outputTokens;
               const contextLimit = getContextLimit(model);
               const contextUsagePercent = Math.round((totalTokens / contextLimit) * 100);
+
+              console.log('[Revenium] 🏁 Stream complete!', {
+                chunks: chunkCount,
+                events: eventCount,
+                assistantTextLength: assistantText.length,
+                inputTokens,
+                outputTokens,
+                totalTokens
+              });
+
+              if (assistantText.length === 0) {
+                console.error('[Revenium] ⚠️ WARNING: No assistant text captured! The response format may have changed.');
+              }
 
               // Send metrics via custom event
               window.dispatchEvent(new CustomEvent('revenium-metrics', {
@@ -236,6 +262,11 @@
 
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
+            chunkCount++;
+
+            if (chunkCount <= 3) {
+              console.log('[Revenium] 📦 Chunk #' + chunkCount + ' (first 200 chars):', chunk.substring(0, 200));
+            }
 
             const parts = buffer.split('\n\n');
             buffer = parts.pop() || '';
@@ -244,6 +275,8 @@
               if (!part.startsWith('data:')) continue;
               const json = part.slice(5).trim();
               if (json === '[DONE]') continue;
+
+              eventCount++;
 
               try {
                 const evt = JSON.parse(json);
