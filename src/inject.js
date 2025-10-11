@@ -55,11 +55,40 @@
   }
 
   function extractDelta(evt) {
-    return evt.delta?.content ||
-           evt.message?.content?.parts?.join('') ||
-           evt.choices?.[0]?.delta?.content ||
-           evt.choices?.[0]?.text ||
-           null;
+    // ChatGPT's current streaming format
+    if (evt.type === 'content_block_delta') {
+      return evt.delta?.text || null;
+    }
+
+    // Check for message content in various formats
+    if (evt.message?.content?.parts) {
+      return evt.message.content.parts.join('');
+    }
+
+    // Check for delta content (various paths)
+    if (evt.delta?.content) {
+      return evt.delta.content;
+    }
+
+    // OpenAI API format
+    if (evt.choices?.[0]?.delta?.content) {
+      return evt.choices[0].delta.content;
+    }
+
+    if (evt.choices?.[0]?.text) {
+      return evt.choices[0].text;
+    }
+
+    // Try to extract text from any 'text' or 'content' fields
+    if (typeof evt.text === 'string') {
+      return evt.text;
+    }
+
+    if (typeof evt.content === 'string') {
+      return evt.content;
+    }
+
+    return null;
   }
 
   const originalFetch = window.fetch;
@@ -180,15 +209,19 @@
               try {
                 const evt = JSON.parse(json);
 
-                // Debug: Log first event to see structure
-                if (assistantText.length === 0) {
-                  console.log('[Revenium] 🔍 First streaming event structure:', evt);
+                // Debug: Log all unique event types we see
+                if (!window.__revenium_seen_types) window.__revenium_seen_types = new Set();
+                if (evt.type && !window.__revenium_seen_types.has(evt.type)) {
+                  console.log('[Revenium] 🔍 New event type detected:', evt.type, evt);
+                  window.__revenium_seen_types.add(evt.type);
                 }
 
                 const delta = extractDelta(evt);
                 if (delta) {
                   assistantText += delta;
-                  console.log('[Revenium] 📝 Captured delta text (total length now: ' + assistantText.length + ')');
+                  if (assistantText.length < 20) {
+                    console.log('[Revenium] 📝 Captured delta text:', delta);
+                  }
 
                   // Send partial update
                   const partialOutputTokens = encodeForModel(assistantText).length;
@@ -205,8 +238,6 @@
                       contextUsagePercent: Math.round((partialTotalTokens / contextLimit) * 100)
                     }
                   }));
-                } else if (assistantText.length === 0) {
-                  console.log('[Revenium] ⚠️ extractDelta returned null for event');
                 }
               } catch (e) {
                 console.warn('[Revenium] Failed to parse streaming event:', e);
