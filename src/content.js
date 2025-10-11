@@ -72,7 +72,14 @@
 
   // Listen for metrics from injected script
   window.addEventListener('revenium-metrics', async (e) => {
-    const { model, inputTokens, outputTokens, latency, ttfb, conversationId } = e.detail;
+    const { model, inputTokens, outputTokens, latency, ttfb, conversationId, contextLimit, contextUsagePercent } = e.detail;
+
+    console.log('[Revenium] 📊 Received metrics from inject.js:', {
+      model,
+      inputTokens,
+      outputTokens,
+      conversationId
+    });
 
     const metrics = {
       id: crypto.randomUUID(),
@@ -83,14 +90,24 @@
       totalCostUSD: computeCost(model, inputTokens, outputTokens),
       inputCostUSD: computeCost(model, inputTokens, 0),
       outputCostUSD: computeCost(model, 0, outputTokens),
+      contextLimit,
+      contextUsagePercent,
       latencyMs: latency,
       ttfbMs: ttfb,
       status: 'ok'
     };
 
+    console.log('[Revenium] 💰 Computed costs:', {
+      totalCost: metrics.totalCostUSD,
+      inputCost: metrics.inputCostUSD,
+      outputCost: metrics.outputCostUSD
+    });
+
     try {
       const response = await chrome.runtime.sendMessage({ type: 'final', metrics });
+      console.log('[Revenium] 📈 Service worker response:', response);
       if (response?.ok) {
+        console.log('[Revenium] ✅ Updating overlay with totals:', response.totals);
         updateOverlay({ type: 'final', metrics, totals: response.totals });
       }
     } catch (error) {
