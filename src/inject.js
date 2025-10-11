@@ -140,6 +140,12 @@
     try {
       if (typeof init.body === 'string') {
         reqBody = JSON.parse(init.body);
+        console.log('[Revenium] 📤 Request body parsed:', {
+          model: reqBody.model,
+          messageCount: reqBody.messages?.length || 0,
+          firstMessage: reqBody.messages?.[0],
+          lastMessage: reqBody.messages?.[reqBody.messages?.length - 1]
+        });
       }
     } catch (e) {
       console.warn('[Revenium] Could not parse request body:', e);
@@ -209,19 +215,28 @@
               try {
                 const evt = JSON.parse(json);
 
-                // Debug: Log all unique event types we see
-                if (!window.__revenium_seen_types) window.__revenium_seen_types = new Set();
+                // Debug: Log all unique event types we see (with full structure for first few)
+                if (!window.__revenium_seen_types) {
+                  window.__revenium_seen_types = new Set();
+                  window.__revenium_event_count = 0;
+                }
+
                 if (evt.type && !window.__revenium_seen_types.has(evt.type)) {
-                  console.log('[Revenium] 🔍 New event type detected:', evt.type, evt);
+                  console.log('[Revenium] 🔍 New event type detected:', evt.type);
+                  console.log('[Revenium] 🔍 Full event structure:', JSON.stringify(evt, null, 2));
                   window.__revenium_seen_types.add(evt.type);
+                }
+
+                // Log first 5 events of any type to see all data
+                if (window.__revenium_event_count < 5) {
+                  console.log('[Revenium] 📦 Event #' + window.__revenium_event_count + ':', evt);
+                  window.__revenium_event_count++;
                 }
 
                 const delta = extractDelta(evt);
                 if (delta) {
                   assistantText += delta;
-                  if (assistantText.length < 20) {
-                    console.log('[Revenium] 📝 Captured delta text:', delta);
-                  }
+                  console.log('[Revenium] 📝 ✅ SUCCESS! Captured delta text:', delta.substring(0, 50));
 
                   // Send partial update
                   const partialOutputTokens = encodeForModel(assistantText).length;
