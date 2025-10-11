@@ -39,7 +39,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/vendor/*", "src/meter-core.js", "src/inject.js"],
+      "resources": ["src/vendor/*"],
       "matches": [
         "https://chat.openai.com/*",
         "https://chatgpt.com/*"

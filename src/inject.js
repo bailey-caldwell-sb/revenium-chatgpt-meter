@@ -12,8 +12,34 @@
 
   console.log('[Revenium] Injected script starting...');
 
+  // Model context window limits (tokens)
+  const CONTEXT_LIMITS = {
+    'gpt-4': 8192,
+    'gpt-4-32k': 32768,
+    'gpt-4-turbo': 128000,
+    'gpt-4o': 128000,
+    'gpt-3.5-turbo': 4096,
+    'gpt-3.5-turbo-16k': 16384,
+    'o1-preview': 128000,
+    'o1-mini': 128000,
+    'default': 8192
+  };
+
+  // Get context limit for a model
+  function getContextLimit(model) {
+    if (!model) return CONTEXT_LIMITS.default;
+
+    // Find matching limit
+    for (const [key, limit] of Object.entries(CONTEXT_LIMITS)) {
+      if (model.toLowerCase().includes(key.toLowerCase())) {
+        return limit;
+      }
+    }
+    return CONTEXT_LIMITS.default;
+  }
+
   // Simple tokenizer (4:1 approximation)
-  function encodeForModel(model, text) {
+  function encodeForModel(text) {
     if (!text) return [];
     return new Array(Math.ceil(text.length / 4)).fill(0);
   }
@@ -96,7 +122,7 @@
 
         const model = reqBody?.model || 'gpt-4';
         const inputText = serializeMessages(reqBody?.messages || []);
-        const inputTokens = encodeForModel(model, inputText).length;
+        const inputTokens = encodeForModel(inputText).length;
 
         try {
           while (true) {
@@ -109,7 +135,10 @@
 
             if (done) {
               const tDone = Date.now();
-              const outputTokens = encodeForModel(model, assistantText).length;
+              const outputTokens = encodeForModel(assistantText).length;
+              const totalTokens = inputTokens + outputTokens;
+              const contextLimit = getContextLimit(model);
+              const contextUsagePercent = Math.round((totalTokens / contextLimit) * 100);
 
               // Send metrics via custom event
               window.dispatchEvent(new CustomEvent('revenium-metrics', {
@@ -117,6 +146,9 @@
                   model,
                   inputTokens,
                   outputTokens,
+                  totalTokens,
+                  contextLimit,
+                  contextUsagePercent,
                   latency: tDone - t0,
                   ttfb: tTFB ? tTFB - t0 : null,
                   conversationId: reqBody?.conversation_id
@@ -147,11 +179,18 @@
                   assistantText += delta;
 
                   // Send partial update
+                  const partialOutputTokens = encodeForModel(assistantText).length;
+                  const partialTotalTokens = inputTokens + partialOutputTokens;
+                  const contextLimit = getContextLimit(model);
+
                   window.dispatchEvent(new CustomEvent('revenium-partial', {
                     detail: {
                       model,
                       inputTokens,
-                      outputTokens: encodeForModel(model, assistantText).length
+                      outputTokens: partialOutputTokens,
+                      totalTokens: partialTotalTokens,
+                      contextLimit,
+                      contextUsagePercent: Math.round((partialTotalTokens / contextLimit) * 100)
                     }
                   }));
                 }

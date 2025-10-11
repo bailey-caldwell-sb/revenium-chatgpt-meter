@@ -49,6 +49,8 @@ function ensureSession(tabId, metrics) {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalCostUSD: 0,
+      contextLimit: metrics?.contextLimit || 8192,
+      contextUsagePercent: 0,
       lastUpdatedAt: Date.now(),
       perMessage: []
     });
@@ -58,12 +60,30 @@ function ensureSession(tabId, metrics) {
 
 /**
  * Update session with finalized metrics
+ * Note: Each API call includes the FULL conversation history in the input
+ * So we track the cumulative total by:
+ * - Using the latest input tokens (which includes full history)
+ * - Accumulating output tokens (each response adds to total)
  */
 function updateSessionWithFinal(session, metrics) {
-  session.totalPromptTokens += metrics.promptTokens || 0;
+  // Input tokens = full conversation history (replace with latest)
+  session.totalPromptTokens = metrics.promptTokens || 0;
+
+  // Output tokens = accumulate all assistant responses
   session.totalCompletionTokens += metrics.completionTokens || 0;
-  session.totalCostUSD += metrics.totalCostUSD || 0;
-  session.totalCostUSD = Math.round(session.totalCostUSD * 10000) / 10000; // Round to 4 decimals
+
+  // Context window tracking
+  session.contextLimit = metrics.contextLimit || session.contextLimit || 8192;
+  const totalTokens = session.totalPromptTokens + session.totalCompletionTokens;
+  session.contextUsagePercent = Math.round((totalTokens / session.contextLimit) * 100);
+
+  // Total cost = latest input cost + cumulative output cost
+  const cumulativeOutputCost = (session.totalCostUSD || 0) - (session.lastInputCostUSD || 0);
+  session.totalCostUSD = (metrics.inputCostUSD || 0) + cumulativeOutputCost + (metrics.outputCostUSD || 0);
+  session.totalCostUSD = Math.round(session.totalCostUSD * 10000) / 10000;
+
+  // Track last input cost for next calculation
+  session.lastInputCostUSD = metrics.inputCostUSD || 0;
   session.lastUpdatedAt = Date.now();
 
   // Update conversation ID if available
@@ -137,6 +157,8 @@ function summarize(session) {
     totalCompletionTokens: session.totalCompletionTokens,
     totalTokens: session.totalPromptTokens + session.totalCompletionTokens,
     totalCostUSD: session.totalCostUSD,
+    contextLimit: session.contextLimit,
+    contextUsagePercent: session.contextUsagePercent,
     messageCount: session.perMessage.length,
     lastUpdatedAt: session.lastUpdatedAt
   };

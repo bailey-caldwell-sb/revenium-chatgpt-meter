@@ -151,6 +151,24 @@
         .kpi-label { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
         .kpi-value { font-size: 20px; font-weight: 700; color: #00d4ff; }
         .kpi-value.cost { color: #00ff88; }
+        .context-bar {
+          margin-top: 12px; padding-top: 12px;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .context-label {
+          font-size: 11px; color: rgba(255,255,255,0.6);
+          margin-bottom: 6px; display: flex; justify-content: space-between;
+        }
+        .context-progress {
+          height: 6px; background: rgba(255,255,255,0.1);
+          border-radius: 3px; overflow: hidden; position: relative;
+        }
+        .context-fill {
+          height: 100%; background: linear-gradient(90deg, #00ff88, #00d4ff);
+          border-radius: 3px; transition: width 0.3s ease;
+        }
+        .context-fill.warning { background: linear-gradient(90deg, #ffa500, #ff8c00); }
+        .context-fill.danger { background: linear-gradient(90deg, #ff6b6b, #ff4444); }
         .latest {
           font-size: 11px; color: rgba(255,255,255,0.5);
           margin-top: 8px; padding-top: 8px;
@@ -179,6 +197,15 @@
             <div class="kpi-value js-tokens">0</div>
           </div>
         </div>
+        <div class="context-bar">
+          <div class="context-label">
+            <span>Context Window</span>
+            <span class="js-context-percent">0%</span>
+          </div>
+          <div class="context-progress">
+            <div class="context-fill js-context-fill" style="width: 0%"></div>
+          </div>
+        </div>
         <div class="latest">
           <div>Latest: <span class="js-latest">-</span></div>
           <div>Model: <span class="js-model">-</span></div>
@@ -205,18 +232,36 @@
     const tokensEl = shadowRoot.querySelector('.js-tokens');
     const latestEl = shadowRoot.querySelector('.js-latest');
     const modelEl = shadowRoot.querySelector('.js-model');
+    const contextPercentEl = shadowRoot.querySelector('.js-context-percent');
+    const contextFillEl = shadowRoot.querySelector('.js-context-fill');
 
     if (data.type === 'reset') {
       costEl.textContent = '$0.0000';
       tokensEl.textContent = '0';
       latestEl.textContent = '-';
       modelEl.textContent = '-';
+      contextPercentEl.textContent = '0%';
+      contextFillEl.style.width = '0%';
+      contextFillEl.className = 'context-fill js-context-fill';
       return;
     }
 
     if (data.totals) {
       costEl.textContent = `$${data.totals.totalCostUSD.toFixed(4)}`;
       tokensEl.textContent = `${data.totals.totalTokens || 0}`;
+
+      // Update context window bar
+      const percent = data.totals.contextUsagePercent || 0;
+      contextPercentEl.textContent = `${percent}%`;
+      contextFillEl.style.width = `${Math.min(percent, 100)}%`;
+
+      // Change color based on usage
+      contextFillEl.className = 'context-fill js-context-fill';
+      if (percent >= 90) {
+        contextFillEl.classList.add('danger');
+      } else if (percent >= 70) {
+        contextFillEl.classList.add('warning');
+      }
     }
 
     if (data.metrics) {
