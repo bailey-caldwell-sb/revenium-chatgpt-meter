@@ -17,6 +17,73 @@
     return new Array(Math.ceil(text.length / 4)).fill(0);
   }
 
+  // Detect if model is a reasoning model (o1, o3 series)
+  function isReasoningModel(model) {
+    if (!model) return false;
+    const modelLower = model.toLowerCase();
+    return modelLower.includes('o1') || modelLower.includes('o3');
+  }
+
+  // Get reasoning token multiplier for model
+  function getReasoningMultiplier(model) {
+    if (!model) return 1;
+    const modelLower = model.toLowerCase();
+
+    if (modelLower.includes('o1-pro') || modelLower.includes('o3-pro')) {
+      return 10; // o1-pro uses ~10x reasoning tokens
+    }
+    if (modelLower.includes('o1') || modelLower.includes('o3')) {
+      return 3; // o1/o3 mini/preview use ~3x reasoning tokens
+    }
+    return 1;
+  }
+
+  // Count images in message content
+  function countImages(messages) {
+    if (!messages || !Array.isArray(messages)) return 0;
+
+    let imageCount = 0;
+    for (const msg of messages) {
+      if (!msg.content) continue;
+
+      // Content can be string or array
+      if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === 'image_url' || part.image_url) {
+            imageCount++;
+          }
+        }
+      }
+    }
+    return imageCount;
+  }
+
+  // Detect DALL-E image generation in response
+  function detectImageGeneration(evt) {
+    // Check for DALL-E content markers
+    if (evt.message?.content?.content_type === 'multimodal_text') {
+      // Check for image parts
+      if (evt.message.content.parts) {
+        const parts = Array.isArray(evt.message.content.parts)
+          ? evt.message.content.parts
+          : [evt.message.content.parts];
+
+        for (const part of parts) {
+          if (typeof part === 'object' && part.content_type === 'image_asset_pointer') {
+            return 1; // Found generated image
+          }
+        }
+      }
+    }
+
+    // Check for dalle in metadata
+    if (evt.message?.metadata?.dalle_generation) {
+      return 1;
+    }
+
+    return 0;
+  }
+
   function serializeMessages(messages) {
     if (!messages || !Array.isArray(messages)) return '';
     return messages.map(m => {
@@ -151,6 +218,13 @@
         const inputText = serializeMessages(reqBody?.messages || []);
         const inputTokens = encodeForModel(inputText).length;
 
+        // Count multimodal content
+        const imageInputCount = countImages(reqBody?.messages || []);
+        const hasReasoningModel = isReasoningModel(model);
+        const reasoningMultiplier = getReasoningMultiplier(model);
+
+        let imageOutputCount = 0;
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -163,7 +237,16 @@
             if (done) {
               const tDone = Date.now();
               const outputTokens = encodeForModel(assistantText).length;
-              const totalTokens = inputTokens + outputTokens;
+
+              // Estimate reasoning tokens for o1/o3 models
+              const estimatedReasoningTokens = hasReasoningModel
+                ? outputTokens * (reasoningMultiplier - 1)
+                : 0;
+
+              const totalTokens = inputTokens + outputTokens + estimatedReasoningTokens;
+
+              // Add image tokens (estimate 85 tokens per image for low detail)
+              const imageInputTokens = imageInputCount * 85;
 
               // Send metrics via custom event
               window.dispatchEvent(new CustomEvent('revenium-metrics', {
@@ -174,7 +257,13 @@
                   totalTokens,
                   latency: tDone - t0,
                   ttfb: tTFB ? tTFB - t0 : null,
-                  conversationId: reqBody?.conversation_id
+                  conversationId: reqBody?.conversation_id,
+                  imageInputCount,
+                  imageOutputCount,
+                  imageInputTokens,
+                  hasReasoningModel,
+                  reasoningMultiplier,
+                  estimatedReasoningTokens
                 }
               }));
 
@@ -210,6 +299,12 @@
               try {
                 const evt = JSON.parse(data);
 
+                // Check for image generation
+                const generatedImages = detectImageGeneration(evt);
+                if (generatedImages > 0) {
+                  imageOutputCount += generatedImages;
+                }
+
                 // Handle SSE delta events: {p: "", o: "add", v: {message: {...}}}
                 let messageToExtract = evt;
                 if (eventType === 'delta' && evt.v?.message && evt.v.message.content?.parts) {
@@ -229,7 +324,11 @@
                       model,
                       inputTokens,
                       outputTokens: partialOutputTokens,
-                      totalTokens: partialTotalTokens
+                      totalTokens: partialTotalTokens,
+                      imageInputCount,
+                      imageOutputCount,
+                      hasReasoningModel,
+                      reasoningMultiplier
                     }
                   }));
                 }

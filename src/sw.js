@@ -8,10 +8,47 @@ let settings = null;
 
 // Inline core functions for service worker (since we can't import as ES module)
 const DEFAULT_PRICING = [
-  { modelPrefix: "gpt-4", inputPerK: 0.03, outputPerK: 0.06, encoding: "cl100k_base" },
-  { modelPrefix: "gpt-3.5", inputPerK: 0.0015, outputPerK: 0.002, encoding: "cl100k_base" },
-  { modelPrefix: "o1-preview", inputPerK: 0.015, outputPerK: 0.06, encoding: "o200k_base" },
-  { modelPrefix: "o1-mini", inputPerK: 0.003, outputPerK: 0.012, encoding: "o200k_base" }
+  {
+    modelPrefix: "gpt-4",
+    inputPerK: 0.03,
+    outputPerK: 0.06,
+    encoding: "cl100k_base",
+    imageInputCost: 0.00255, // ~85 tokens @ $0.03/1K
+    imageOutputCost: 0.04, // DALL-E standard
+    imageOutputHDCost: 0.08 // DALL-E HD
+  },
+  {
+    modelPrefix: "gpt-3.5",
+    inputPerK: 0.0015,
+    outputPerK: 0.002,
+    encoding: "cl100k_base",
+    imageInputCost: 0.0001275, // ~85 tokens @ $0.0015/1K
+    imageOutputCost: 0.04
+  },
+  {
+    modelPrefix: "o1-preview",
+    inputPerK: 0.015,
+    outputPerK: 0.06,
+    encoding: "o200k_base",
+    reasoningMultiplier: 3,
+    imageInputCost: 0.001275 // ~85 tokens @ $0.015/1K
+  },
+  {
+    modelPrefix: "o1-mini",
+    inputPerK: 0.003,
+    outputPerK: 0.012,
+    encoding: "o200k_base",
+    reasoningMultiplier: 3,
+    imageInputCost: 0.000255 // ~85 tokens @ $0.003/1K
+  },
+  {
+    modelPrefix: "o1-pro",
+    inputPerK: 0.15,
+    outputPerK: 0.6,
+    encoding: "o200k_base",
+    reasoningMultiplier: 10,
+    imageInputCost: 0.01275 // ~85 tokens @ $0.15/1K
+  }
 ];
 
 const DEFAULT_TAGS = [
@@ -56,7 +93,13 @@ function ensureSession(tabId, metrics) {
       model: metrics?.model || 'gpt-4',
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
+      totalReasoningTokens: 0,
+      totalImageInputs: 0,
+      totalImageOutputs: 0,
       totalCostUSD: 0,
+      textCostUSD: 0,
+      imageCostUSD: 0,
+      reasoningCostUSD: 0,
       lastUpdatedAt: Date.now(),
       perMessage: [],
       tagId: null,
@@ -73,6 +116,7 @@ function ensureSession(tabId, metrics) {
  * So we track the cumulative total by:
  * - Using the latest input tokens (which includes full history)
  * - Accumulating output tokens (each response adds to total)
+ * - Accumulating multimodal content (images, reasoning tokens)
  */
 function updateSessionWithFinal(session, metrics) {
   // Input tokens = full conversation history (replace with latest)
@@ -81,13 +125,33 @@ function updateSessionWithFinal(session, metrics) {
   // Output tokens = accumulate all assistant responses
   session.totalCompletionTokens += metrics.completionTokens || 0;
 
-  // Total cost = latest input cost + cumulative output cost
-  const cumulativeOutputCost = (session.totalCostUSD || 0) - (session.lastInputCostUSD || 0);
-  session.totalCostUSD = (metrics.inputCostUSD || 0) + cumulativeOutputCost + (metrics.outputCostUSD || 0);
-  session.totalCostUSD = Math.round(session.totalCostUSD * 10000) / 10000;
+  // Reasoning tokens = accumulate estimated reasoning
+  session.totalReasoningTokens += metrics.estimatedReasoningTokens || 0;
+
+  // Images = accumulate counts
+  session.totalImageInputs += metrics.imageInputCount || 0;
+  session.totalImageOutputs += metrics.imageOutputCount || 0;
+
+  // Calculate cost breakdown
+  const textInputCost = metrics.inputCostUSD || 0;
+  const textOutputCost = metrics.outputCostUSD || 0;
+  const imageCost = metrics.imageCostUSD || 0;
+  const reasoningCost = metrics.reasoningCostUSD || 0;
+
+  // Total cost = latest input cost + cumulative output/image/reasoning costs
+  const cumulativeOutputCost = (session.textCostUSD || 0) - (session.lastInputCostUSD || 0);
+  session.textCostUSD = textInputCost + cumulativeOutputCost + textOutputCost;
+  session.imageCostUSD = (session.imageCostUSD || 0) + imageCost;
+  session.reasoningCostUSD = (session.reasoningCostUSD || 0) + reasoningCost;
+
+  session.totalCostUSD = session.textCostUSD + session.imageCostUSD + session.reasoningCostUSD;
+  session.totalCostUSD = round4(session.totalCostUSD);
+  session.textCostUSD = round4(session.textCostUSD);
+  session.imageCostUSD = round4(session.imageCostUSD);
+  session.reasoningCostUSD = round4(session.reasoningCostUSD);
 
   // Track last input cost for next calculation
-  session.lastInputCostUSD = metrics.inputCostUSD || 0;
+  session.lastInputCostUSD = textInputCost;
   session.lastUpdatedAt = Date.now();
 
   // Update conversation ID if available

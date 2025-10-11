@@ -70,9 +70,58 @@
     return round4(inputCost + outputCost);
   }
 
+  function computeMultimodalCost(model, metrics) {
+    const pricing = pricingTable.find(p => model?.startsWith(p.modelPrefix)) || pricingTable[0];
+
+    // Text costs
+    const inputCost = (metrics.inputTokens / 1000) * pricing.inputPerK;
+    const outputCost = (metrics.outputTokens / 1000) * pricing.outputPerK;
+
+    // Image costs
+    const imageInputCost = (metrics.imageInputCount || 0) * (pricing.imageInputCost || 0);
+    const imageOutputCost = (metrics.imageOutputCount || 0) * (pricing.imageOutputCost || 0);
+
+    // Reasoning costs (estimated)
+    const reasoningTokens = metrics.estimatedReasoningTokens || 0;
+    const reasoningCost = (reasoningTokens / 1000) * pricing.outputPerK; // Reasoning billed as output
+
+    return {
+      textCost: round4(inputCost + outputCost),
+      imageCost: round4(imageInputCost + imageOutputCost),
+      reasoningCost: round4(reasoningCost),
+      totalCost: round4(inputCost + outputCost + imageInputCost + imageOutputCost + reasoningCost),
+      inputCostUSD: round4(inputCost),
+      outputCostUSD: round4(outputCost),
+      imageCostUSD: round4(imageInputCost + imageOutputCost),
+      reasoningCostUSD: round4(reasoningCost)
+    };
+  }
+
   // Listen for metrics from injected script
   window.addEventListener('revenium-metrics', async (e) => {
-    const { model, inputTokens, outputTokens, latency, ttfb, conversationId } = e.detail;
+    const {
+      model,
+      inputTokens,
+      outputTokens,
+      latency,
+      ttfb,
+      conversationId,
+      imageInputCount,
+      imageOutputCount,
+      imageInputTokens,
+      hasReasoningModel,
+      reasoningMultiplier,
+      estimatedReasoningTokens
+    } = e.detail;
+
+    // Calculate multimodal costs
+    const costs = computeMultimodalCost(model, {
+      inputTokens,
+      outputTokens,
+      imageInputCount,
+      imageOutputCount,
+      estimatedReasoningTokens
+    });
 
     const metrics = {
       id: crypto.randomUUID(),
@@ -80,9 +129,17 @@
       model,
       promptTokens: inputTokens,
       completionTokens: outputTokens,
-      totalCostUSD: computeCost(model, inputTokens, outputTokens),
-      inputCostUSD: computeCost(model, inputTokens, 0),
-      outputCostUSD: computeCost(model, 0, outputTokens),
+      totalCostUSD: costs.totalCost,
+      inputCostUSD: costs.inputCostUSD,
+      outputCostUSD: costs.outputCostUSD,
+      imageCostUSD: costs.imageCostUSD,
+      reasoningCostUSD: costs.reasoningCostUSD,
+      imageInputCount: imageInputCount || 0,
+      imageOutputCount: imageOutputCount || 0,
+      imageInputTokens: imageInputTokens || 0,
+      hasReasoningModel: hasReasoningModel || false,
+      reasoningMultiplier: reasoningMultiplier || 1,
+      estimatedReasoningTokens: estimatedReasoningTokens || 0,
       latencyMs: latency,
       ttfbMs: ttfb,
       status: 'ok'
