@@ -314,8 +314,8 @@
                 // Handle SSE delta events: {p: "", o: "add", v: {message: {...}}}
                 let messageToExtract = evt;
                 if (eventType === 'delta' && evt.v?.message) {
+                  console.log('[Revenium] 🔄 Delta event detected, v.message structure:', evt.v.message);
                   messageToExtract = { input_message: evt.v.message };
-                  console.log('[Revenium] 🔄 Delta event detected, extracting from v.message');
                 }
 
                 const delta = extractDelta(messageToExtract);
