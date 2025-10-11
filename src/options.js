@@ -17,8 +17,7 @@ const DEFAULT_SETTINGS = {
   privacy: {
     storeHistory: true,
     redactUserText: true
-  },
-  openaiApiKey: null
+  }
 };
 
 let currentSettings = null;
@@ -65,10 +64,7 @@ async function saveSettings() {
       redactUserText: document.getElementById('redact-text').checked
     };
 
-    // Collect API key
-    const apiKey = document.getElementById('openai-api-key').value.trim() || null;
-
-    const settings = { pricing, ui, privacy, openaiApiKey: apiKey };
+    const settings = { pricing, ui, privacy };
 
     // Save to storage
     await chrome.storage.local.set({ settings });
@@ -174,94 +170,13 @@ function showStatus(message, type) {
 }
 
 /**
- * Show API key status message
- */
-function showAPIKeyStatus(message, type) {
-  const status = document.getElementById('api-key-status');
-  status.textContent = message;
-  status.className = `status ${type}`;
-
-  setTimeout(() => {
-    status.className = 'status';
-  }, 5000);
-}
-
-/**
- * Test OpenAI API key
- */
-async function testAPIKey() {
-  const apiKey = document.getElementById('openai-api-key').value.trim();
-
-  if (!apiKey) {
-    showAPIKeyStatus('Please enter an API key', 'error');
-    return;
-  }
-
-  if (!apiKey.startsWith('sk-')) {
-    showAPIKeyStatus('Invalid API key format (should start with sk-)', 'error');
-    return;
-  }
-
-  showAPIKeyStatus('Testing API key...', 'success');
-
-  try {
-    // Test the API key by making a simple request
-    const response = await fetch('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      }
-    });
-
-    if (response.ok) {
-      showAPIKeyStatus('✓ API key is valid!', 'success');
-    } else {
-      const error = await response.json();
-      showAPIKeyStatus(`✗ Invalid API key: ${error.error?.message || 'Unknown error'}`, 'error');
-    }
-  } catch (error) {
-    showAPIKeyStatus(`✗ Connection failed: ${error.message}`, 'error');
-  }
-}
-
-/**
- * Clear OpenAI API key
- */
-async function clearAPIKey() {
-  if (!confirm('Clear your OpenAI API key?')) return;
-
-  document.getElementById('openai-api-key').value = '';
-  const settings = currentSettings;
-  settings.openaiApiKey = null;
-
-  await chrome.storage.local.set({ settings });
-  await chrome.runtime.sendMessage({ type: 'updateSettings', settings });
-
-  showAPIKeyStatus('API key cleared', 'success');
-}
-
-/**
- * Load API key into field
- */
-async function loadAPIKey() {
-  const result = await chrome.storage.local.get('settings');
-  const settings = result.settings || DEFAULT_SETTINGS;
-
-  if (settings.openaiApiKey) {
-    document.getElementById('openai-api-key').value = settings.openaiApiKey;
-  }
-}
-
-/**
  * Initialize
  */
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
-  await loadAPIKey();
 
   // Event listeners
   document.getElementById('save').addEventListener('click', saveSettings);
   document.getElementById('reset').addEventListener('click', resetSettings);
   document.getElementById('add-pricing').addEventListener('click', () => addPricingRow());
-  document.getElementById('test-api-key').addEventListener('click', testAPIKey);
-  document.getElementById('clear-api-key').addEventListener('click', clearAPIKey);
 });

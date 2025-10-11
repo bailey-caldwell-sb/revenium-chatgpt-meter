@@ -66,20 +66,6 @@ function ensureSession(tabId, metrics) {
  * - Accumulating output tokens (each response adds to total)
  */
 function updateSessionWithFinal(session, metrics) {
-  console.log('[Revenium SW] 📥 Before update:', {
-    totalPromptTokens: session.totalPromptTokens,
-    totalCompletionTokens: session.totalCompletionTokens,
-    totalCostUSD: session.totalCostUSD,
-    messageCount: session.perMessage.length
-  });
-
-  console.log('[Revenium SW] 📊 New metrics:', {
-    promptTokens: metrics.promptTokens,
-    completionTokens: metrics.completionTokens,
-    inputCostUSD: metrics.inputCostUSD,
-    outputCostUSD: metrics.outputCostUSD
-  });
-
   // Input tokens = full conversation history (replace with latest)
   session.totalPromptTokens = metrics.promptTokens || 0;
 
@@ -110,15 +96,6 @@ function updateSessionWithFinal(session, metrics) {
   if (session.perMessage.length > 100) {
     session.perMessage.shift();
   }
-
-  console.log('[Revenium SW] 📤 After update:', {
-    totalPromptTokens: session.totalPromptTokens,
-    totalCompletionTokens: session.totalCompletionTokens,
-    totalTokens,
-    totalCostUSD: session.totalCostUSD,
-    contextUsagePercent: session.contextUsagePercent,
-    messageCount: session.perMessage.length
-  });
 
   return session;
 }
@@ -308,11 +285,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
  * Initialize on install
  */
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[Revenium SW] Extension installed');
   await loadSettings();
 });
 
 // Load settings on startup
 loadSettings();
-
-console.log('[Revenium SW] Service worker initialized');

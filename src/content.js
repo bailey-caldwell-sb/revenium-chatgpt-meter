@@ -1,7 +1,6 @@
 // content.js - Content script (simplified to just UI)
 
 (async () => {
-  console.log('[Revenium] Content script loading...');
 
   // Note: inject.js runs automatically via manifest.json with world:"MAIN"
   // This bypasses CSP and runs in the page context
@@ -15,7 +14,6 @@
 
         if (chatInput || mainContent || document.querySelector('[class*="composer"]')) {
           clearInterval(checkInterval);
-          console.log('[Revenium] ChatGPT UI detected, waiting for React...');
           // Extra delay to ensure React is fully initialized
           setTimeout(resolve, 3000);
         }
@@ -24,13 +22,10 @@
       // Timeout after 20 seconds
       setTimeout(() => {
         clearInterval(checkInterval);
-        console.log('[Revenium] Timeout waiting for ChatGPT, proceeding anyway...');
         resolve();
       }, 20000);
     });
   }
-
-  console.log('[Revenium] Waiting for ChatGPT to be ready...');
   await waitForChatGPTReady();
 
   const DEFAULT_PRICING = [
@@ -51,12 +46,10 @@
       pricingTable = response.settings?.pricing || DEFAULT_PRICING;
     }
   } catch (error) {
-    // Extension context invalidated (extension was reloaded)
+    // Extension context invalidated - exit silently
     if (error.message?.includes('Extension context invalidated')) {
-      console.log('[Revenium] Extension was reloaded, please refresh the page');
       return;
     }
-    console.error('[Revenium] Failed to load settings:', error);
   }
 
   function round4(num) {
@@ -74,13 +67,6 @@
   window.addEventListener('revenium-metrics', async (e) => {
     const { model, inputTokens, outputTokens, latency, ttfb, conversationId, contextLimit, contextUsagePercent } = e.detail;
 
-    console.log('[Revenium] 📊 Received metrics from inject.js:', {
-      model,
-      inputTokens,
-      outputTokens,
-      conversationId
-    });
-
     const metrics = {
       id: crypto.randomUUID(),
       conversationId,
@@ -97,17 +83,9 @@
       status: 'ok'
     };
 
-    console.log('[Revenium] 💰 Computed costs:', {
-      totalCost: metrics.totalCostUSD,
-      inputCost: metrics.inputCostUSD,
-      outputCost: metrics.outputCostUSD
-    });
-
     try {
       const response = await chrome.runtime.sendMessage({ type: 'final', metrics });
-      console.log('[Revenium] 📈 Service worker response:', response);
       if (response?.ok) {
-        console.log('[Revenium] ✅ Updating overlay with totals:', response.totals);
         updateOverlay({ type: 'final', metrics, totals: response.totals });
       }
     } catch (error) {
@@ -235,11 +213,9 @@
         await chrome.runtime.sendMessage({ type: 'reset' });
         updateOverlay({ type: 'reset' });
       } catch (error) {
-        console.error('[Revenium] Failed to reset:', error);
+        // Silently handle errors
       }
     });
-
-    console.log('[Revenium] Overlay created');
   }
 
   function updateOverlay(data) {

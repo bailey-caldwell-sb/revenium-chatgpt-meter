@@ -10,7 +10,6 @@
   }
   window.__REVENIUM_INJECTED__ = true;
 
-  console.log('[Revenium] Injected script starting...');
 
   // Model context window limits (tokens)
   const CONTEXT_LIMITS = {
@@ -140,41 +139,19 @@
     const init = args[1] || {};
     const method = (init.method || 'GET').toUpperCase();
 
-    // Debug: Log ALL POST requests to see what endpoints are being used
-    if (method === 'POST') {
-      console.log('[Revenium] 📡 POST request:', url);
-    }
-
-    // Match ChatGPT conversation API endpoint (matches /backend-api/conversation or /backend-api/f/conversation)
+    // Match ChatGPT conversation API endpoint
     const isChat = method === 'POST' && (
       url.includes('/backend-api/conversation') ||
       url.includes('/backend-api/f/conversation')
     );
 
-    // Debug: Log conversation requests with extra detail
-    if (isChat) {
-      console.log('[Revenium] 🎯 CONVERSATION ENDPOINT MATCHED!:', url);
-    }
-
     // Call original fetch first
     const response = await originalFetch.apply(this, args);
-
-    // Debug logging
-    if (isChat) {
-      console.log('[Revenium] Chat request found!', {
-        url,
-        ok: response.ok,
-        status: response.status,
-        hasBody: !!response.body
-      });
-    }
 
     // Only intercept successful chat conversation requests
     if (!isChat || !response.ok || !response.body) {
       return response;
     }
-
-    console.log('[Revenium] ✅ Intercepting chat API call:', url);
 
     const t0 = Date.now();
     let reqBody = null;
@@ -182,15 +159,9 @@
     try {
       if (typeof init.body === 'string') {
         reqBody = JSON.parse(init.body);
-        console.log('[Revenium] 📤 Request body parsed:', {
-          model: reqBody.model,
-          messageCount: reqBody.messages?.length || 0,
-          firstMessage: reqBody.messages?.[0],
-          lastMessage: reqBody.messages?.[reqBody.messages?.length - 1]
-        });
       }
     } catch (e) {
-      console.warn('[Revenium] Could not parse request body:', e);
+      // Silently handle parse errors
     }
 
     const reader = response.body.getReader();
@@ -201,14 +172,10 @@
         let assistantText = '';
         let firstByte = false;
         let tTFB = null;
-        let chunkCount = 0;
-        let eventCount = 0;
 
         const model = reqBody?.model || 'gpt-4';
         const inputText = serializeMessages(reqBody?.messages || []);
         const inputTokens = encodeForModel(inputText).length;
-
-        console.log('[Revenium] 🎬 Starting stream reading...', { model, inputTokens });
 
         try {
           while (true) {
@@ -225,19 +192,6 @@
               const totalTokens = inputTokens + outputTokens;
               const contextLimit = getContextLimit(model);
               const contextUsagePercent = Math.round((totalTokens / contextLimit) * 100);
-
-              console.log('[Revenium] 🏁 Stream complete!', {
-                chunks: chunkCount,
-                events: eventCount,
-                assistantTextLength: assistantText.length,
-                inputTokens,
-                outputTokens,
-                totalTokens
-              });
-
-              if (assistantText.length === 0) {
-                console.error('[Revenium] ⚠️ WARNING: No assistant text captured! The response format may have changed.');
-              }
 
               // Send metrics via custom event
               window.dispatchEvent(new CustomEvent('revenium-metrics', {
@@ -262,11 +216,6 @@
 
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
-            chunkCount++;
-
-            if (chunkCount <= 3) {
-              console.log('[Revenium] 📦 Chunk #' + chunkCount + ' (first 200 chars):', chunk.substring(0, 200));
-            }
 
             const parts = buffer.split('\n\n');
             buffer = parts.pop() || '';
@@ -288,43 +237,18 @@
               // Skip if no data or if it's [DONE]
               if (!data || data === '[DONE]') continue;
 
-              eventCount++;
-
               try {
                 const evt = JSON.parse(data);
 
-                // Debug: Log all unique event types we see (with full structure for first few)
-                if (!window.__revenium_seen_types) {
-                  window.__revenium_seen_types = new Set();
-                  window.__revenium_event_count = 0;
-                }
-
-                if (evt.type && !window.__revenium_seen_types.has(evt.type)) {
-                  console.log('[Revenium] 🔍 New event type detected:', evt.type);
-                  console.log('[Revenium] 🔍 Full event structure:', JSON.stringify(evt, null, 2));
-                  window.__revenium_seen_types.add(evt.type);
-                }
-
-                // Log first 5 events of any type to see all data
-                if (window.__revenium_event_count < 5) {
-                  console.log('[Revenium] 📦 Event #' + window.__revenium_event_count + ':', evt);
-                  window.__revenium_event_count++;
-                }
-
                 // Handle SSE delta events: {p: "", o: "add", v: {message: {...}}}
-                // Only process "delta" events, not "delta_encoding"
                 let messageToExtract = evt;
                 if (eventType === 'delta' && evt.v?.message && evt.v.message.content?.parts) {
-                  console.log('[Revenium] 🔄 Delta event with content.parts, extracting text...');
                   messageToExtract = { input_message: evt.v.message };
                 }
 
                 const delta = extractDelta(messageToExtract);
                 if (delta) {
-                  const previousLength = assistantText.length;
                   assistantText += delta;
-                  console.log('[Revenium] 📝 ✅ SUCCESS! Captured delta text:', delta);
-                  console.log('[Revenium] 📊 Total assistant text now:', assistantText.length, 'chars (was', previousLength, ')');
 
                   // Send partial update
                   const partialOutputTokens = encodeForModel(assistantText).length;
@@ -343,12 +267,11 @@
                   }));
                 }
               } catch (e) {
-                console.warn('[Revenium] Failed to parse streaming event:', e);
+                // Silently handle parse errors
               }
             }
           }
         } catch (error) {
-          console.error('[Revenium] Stream error:', error);
           controller.error(error);
         }
       }
@@ -360,6 +283,4 @@
       headers: response.headers
     });
   };
-
-  console.log('[Revenium] Fetch patched in page context');
 })();
