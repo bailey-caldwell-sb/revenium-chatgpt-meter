@@ -179,9 +179,16 @@
 
               try {
                 const evt = JSON.parse(json);
+
+                // Debug: Log first event to see structure
+                if (assistantText.length === 0) {
+                  console.log('[Revenium] 🔍 First streaming event structure:', evt);
+                }
+
                 const delta = extractDelta(evt);
                 if (delta) {
                   assistantText += delta;
+                  console.log('[Revenium] 📝 Captured delta text (total length now: ' + assistantText.length + ')');
 
                   // Send partial update
                   const partialOutputTokens = encodeForModel(assistantText).length;
@@ -198,8 +205,12 @@
                       contextUsagePercent: Math.round((partialTotalTokens / contextLimit) * 100)
                     }
                   }));
+                } else if (assistantText.length === 0) {
+                  console.log('[Revenium] ⚠️ extractDelta returned null for event');
                 }
-              } catch (e) {}
+              } catch (e) {
+                console.warn('[Revenium] Failed to parse streaming event:', e);
+              }
             }
           }
         } catch (error) {
