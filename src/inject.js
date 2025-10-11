@@ -312,16 +312,19 @@
                 }
 
                 // Handle SSE delta events: {p: "", o: "add", v: {message: {...}}}
+                // Only process "delta" events, not "delta_encoding"
                 let messageToExtract = evt;
-                if (eventType === 'delta' && evt.v?.message) {
-                  console.log('[Revenium] 🔄 Delta event detected, v.message structure:', evt.v.message);
+                if (eventType === 'delta' && evt.v?.message && evt.v.message.content?.parts) {
+                  console.log('[Revenium] 🔄 Delta event with content.parts, extracting text...');
                   messageToExtract = { input_message: evt.v.message };
                 }
 
                 const delta = extractDelta(messageToExtract);
                 if (delta) {
+                  const previousLength = assistantText.length;
                   assistantText += delta;
-                  console.log('[Revenium] 📝 ✅ SUCCESS! Captured delta text:', delta.substring(0, 50));
+                  console.log('[Revenium] 📝 ✅ SUCCESS! Captured delta text:', delta);
+                  console.log('[Revenium] 📊 Total assistant text now:', assistantText.length, 'chars (was', previousLength, ')');
 
                   // Send partial update
                   const partialOutputTokens = encodeForModel(assistantText).length;
