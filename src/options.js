@@ -1,10 +1,47 @@
 // options.js - Settings page logic
 
 const DEFAULT_PRICING = [
-  { modelPrefix: 'gpt-4', inputPerK: 0.03, outputPerK: 0.06, encoding: 'cl100k_base' },
-  { modelPrefix: 'gpt-3.5', inputPerK: 0.0015, outputPerK: 0.002, encoding: 'cl100k_base' },
-  { modelPrefix: 'o1-preview', inputPerK: 0.015, outputPerK: 0.06, encoding: 'o200k_base' },
-  { modelPrefix: 'o1-mini', inputPerK: 0.003, outputPerK: 0.012, encoding: 'o200k_base' }
+  {
+    modelPrefix: 'gpt-4',
+    inputPerK: 0.03,
+    outputPerK: 0.06,
+    encoding: 'cl100k_base',
+    imageInputCost: 0.00255,
+    imageOutputCost: 0.04,
+    imageOutputHDCost: 0.08
+  },
+  {
+    modelPrefix: 'gpt-3.5',
+    inputPerK: 0.0015,
+    outputPerK: 0.002,
+    encoding: 'cl100k_base',
+    imageInputCost: 0.0001275,
+    imageOutputCost: 0.04
+  },
+  {
+    modelPrefix: 'o1-preview',
+    inputPerK: 0.015,
+    outputPerK: 0.06,
+    encoding: 'o200k_base',
+    reasoningMultiplier: 3,
+    imageInputCost: 0.001275
+  },
+  {
+    modelPrefix: 'o1-mini',
+    inputPerK: 0.003,
+    outputPerK: 0.012,
+    encoding: 'o200k_base',
+    reasoningMultiplier: 3,
+    imageInputCost: 0.000255
+  },
+  {
+    modelPrefix: 'o1-pro',
+    inputPerK: 0.15,
+    outputPerK: 0.6,
+    encoding: 'o200k_base',
+    reasoningMultiplier: 10,
+    imageInputCost: 0.01275
+  }
 ];
 
 const DEFAULT_TAGS = [
@@ -53,9 +90,18 @@ async function saveSettings() {
       const encoding = row.querySelector('.encoding').value;
       const inputPerK = parseFloat(row.querySelector('.input-perk').value);
       const outputPerK = parseFloat(row.querySelector('.output-perk').value);
+      const imageInputCost = parseFloat(row.querySelector('.image-input-cost').value) || 0;
+      const imageOutputCost = parseFloat(row.querySelector('.image-output-cost').value) || 0;
+      const reasoningMultiplier = parseFloat(row.querySelector('.reasoning-multiplier').value) || 1;
 
       if (modelPrefix && !isNaN(inputPerK) && !isNaN(outputPerK)) {
-        pricing.push({ modelPrefix, encoding, inputPerK, outputPerK });
+        const pricingEntry = { modelPrefix, encoding, inputPerK, outputPerK };
+
+        if (imageInputCost > 0) pricingEntry.imageInputCost = imageInputCost;
+        if (imageOutputCost > 0) pricingEntry.imageOutputCost = imageOutputCost;
+        if (reasoningMultiplier > 1) pricingEntry.reasoningMultiplier = reasoningMultiplier;
+
+        pricing.push(pricingEntry);
       }
     }
 
@@ -163,6 +209,9 @@ function addPricingRow(data = null) {
   const encoding = data?.encoding || 'cl100k_base';
   const inputPerK = data?.inputPerK || 0;
   const outputPerK = data?.outputPerK || 0;
+  const imageInputCost = data?.imageInputCost || 0;
+  const imageOutputCost = data?.imageOutputCost || 0;
+  const reasoningMultiplier = data?.reasoningMultiplier || 1;
 
   row.innerHTML = `
     <td><input type="text" class="model-prefix" value="${modelPrefix}" placeholder="gpt-4"></td>
@@ -175,6 +224,9 @@ function addPricingRow(data = null) {
     </td>
     <td><input type="number" class="input-perk" value="${inputPerK}" step="0.0001" min="0"></td>
     <td><input type="number" class="output-perk" value="${outputPerK}" step="0.0001" min="0"></td>
+    <td><input type="number" class="image-input-cost" value="${imageInputCost}" step="0.00001" min="0" placeholder="0"></td>
+    <td><input type="number" class="image-output-cost" value="${imageOutputCost}" step="0.001" min="0" placeholder="0"></td>
+    <td><input type="number" class="reasoning-multiplier" value="${reasoningMultiplier}" step="1" min="1" max="20" placeholder="1"></td>
     <td><button class="delete-btn">Delete</button></td>
   `;
 

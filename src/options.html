@@ -215,13 +215,20 @@
 
     <div class="section">
       <h2>Model Pricing</h2>
+      <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 16px; font-size: 13px;">
+        Configure token and multimodal pricing. <strong>Image In</strong> = cost per image input (~85 tokens),
+        <strong>Image Out</strong> = cost per generated image (DALL-E), <strong>Reasoning×</strong> = multiplier for o1/o3 reasoning tokens (3-10x typical).
+      </p>
       <table id="pricing-table">
         <thead>
           <tr>
             <th>Model Prefix</th>
             <th>Encoding</th>
-            <th>Input ($/1K tokens)</th>
-            <th>Output ($/1K tokens)</th>
+            <th>Input ($/1K)</th>
+            <th>Output ($/1K)</th>
+            <th>Image In ($)</th>
+            <th>Image Out ($)</th>
+            <th>Reasoning×</th>
             <th>Action</th>
           </tr>
         </thead>
