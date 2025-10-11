@@ -218,6 +218,25 @@
     </div>
 
     <div class="section">
+      <h2>OpenAI API Integration</h2>
+      <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 16px; font-size: 14px;">
+        Connect your OpenAI API key to track official usage metrics, budgets, and billing data.
+      </p>
+      <div style="margin-bottom: 12px;">
+        <label for="openai-api-key" style="display: block; margin-bottom: 8px;">API Key:</label>
+        <input type="password" id="openai-api-key" placeholder="sk-..." style="font-family: monospace;">
+        <p style="color: rgba(255, 255, 136, 0.8); font-size: 12px; margin-top: 8px;">
+          ⚠️ Your API key is stored locally and never sent anywhere except OpenAI's API.
+        </p>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 12px;">
+        <button type="button" id="test-api-key" class="secondary" style="flex: 0 0 auto;">Test Connection</button>
+        <button type="button" id="clear-api-key" class="delete-btn" style="flex: 0 0 auto;">Clear Key</button>
+      </div>
+      <div id="api-key-status" class="status"></div>
+    </div>
+
+    <div class="section">
       <h2>Privacy</h2>
       <div class="checkbox-group">
         <input type="checkbox" id="store-history">
