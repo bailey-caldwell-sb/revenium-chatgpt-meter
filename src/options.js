@@ -7,8 +7,16 @@ const DEFAULT_PRICING = [
   { modelPrefix: 'o1-mini', inputPerK: 0.003, outputPerK: 0.012, encoding: 'o200k_base' }
 ];
 
+const DEFAULT_TAGS = [
+  { id: 'work', name: 'Work', color: '#00d4ff', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'personal', name: 'Personal', color: '#00ff88', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'research', name: 'Research', color: '#ff00ff', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'acme', name: 'Acme Industries', color: '#ffa500', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } }
+];
+
 const DEFAULT_SETTINGS = {
   pricing: DEFAULT_PRICING,
+  tags: DEFAULT_TAGS,
   ui: {
     position: 'right',
     compact: false,
@@ -38,9 +46,9 @@ async function saveSettings() {
   try {
     // Collect pricing table data
     const pricing = [];
-    const rows = document.querySelectorAll('#pricing-body tr');
+    const pricingRows = document.querySelectorAll('#pricing-body tr');
 
-    for (const row of rows) {
+    for (const row of pricingRows) {
       const modelPrefix = row.querySelector('.model-prefix').value.trim();
       const encoding = row.querySelector('.encoding').value;
       const inputPerK = parseFloat(row.querySelector('.input-perk').value);
@@ -48,6 +56,25 @@ async function saveSettings() {
 
       if (modelPrefix && !isNaN(inputPerK) && !isNaN(outputPerK)) {
         pricing.push({ modelPrefix, encoding, inputPerK, outputPerK });
+      }
+    }
+
+    // Collect tags data
+    const tags = [];
+    const tagRows = document.querySelectorAll('#tags-body tr');
+
+    for (const row of tagRows) {
+      const name = row.querySelector('.tag-name').value.trim();
+      const color = row.querySelector('.tag-color').value;
+      const id = row.dataset.tagId;
+
+      if (name) {
+        tags.push({
+          id: id || crypto.randomUUID(),
+          name,
+          color,
+          stats: { totalCost: 0, totalTokens: 0, messageCount: 0 }
+        });
       }
     }
 
@@ -64,7 +91,7 @@ async function saveSettings() {
       redactUserText: document.getElementById('redact-text').checked
     };
 
-    const settings = { pricing, ui, privacy };
+    const settings = { pricing, tags, ui, privacy };
 
     // Save to storage
     await chrome.storage.local.set({ settings });
@@ -99,6 +126,9 @@ async function resetSettings() {
 function renderSettings() {
   // Render pricing table
   renderPricingTable();
+
+  // Render tags table
+  renderTagsTable();
 
   // Render UI settings
   document.getElementById('position').value = currentSettings.ui.position;
@@ -157,6 +187,72 @@ function addPricingRow(data = null) {
 }
 
 /**
+ * Render tags table
+ */
+function renderTagsTable() {
+  const tbody = document.getElementById('tags-body');
+  tbody.innerHTML = '';
+
+  const tags = currentSettings.tags || DEFAULT_TAGS;
+  tags.forEach((tag) => {
+    addTagRow(tag);
+  });
+}
+
+/**
+ * Add tag row
+ */
+function addTagRow(data = null) {
+  const tbody = document.getElementById('tags-body');
+  const row = document.createElement('tr');
+
+  const id = data?.id || '';
+  const name = data?.name || '';
+  const color = data?.color || '#00d4ff';
+
+  row.dataset.tagId = id;
+
+  row.innerHTML = `
+    <td><input type="text" class="tag-name" value="${name}" placeholder="Work"></td>
+    <td><input type="color" class="tag-color" value="${color}"></td>
+    <td>
+      <div class="tag-preview" style="background: ${color}20; color: ${color};">
+        <span class="tag-preview-dot" style="background: ${color};"></span>
+        <span class="tag-preview-text">${name || 'Tag name'}</span>
+      </div>
+    </td>
+    <td><button class="delete-btn js-delete-tag">Delete</button></td>
+  `;
+
+  // Update preview on change
+  const nameInput = row.querySelector('.tag-name');
+  const colorInput = row.querySelector('.tag-color');
+  const preview = row.querySelector('.tag-preview');
+  const previewDot = row.querySelector('.tag-preview-dot');
+  const previewText = row.querySelector('.tag-preview-text');
+
+  nameInput.addEventListener('input', () => {
+    previewText.textContent = nameInput.value || 'Tag name';
+  });
+
+  colorInput.addEventListener('input', () => {
+    const newColor = colorInput.value;
+    preview.style.background = `${newColor}20`;
+    preview.style.color = newColor;
+    previewDot.style.background = newColor;
+  });
+
+  // Add delete handler
+  row.querySelector('.js-delete-tag').addEventListener('click', () => {
+    if (confirm('Delete this tag? This cannot be undone.')) {
+      row.remove();
+    }
+  });
+
+  tbody.appendChild(row);
+}
+
+/**
  * Show status message
  */
 function showStatus(message, type) {
@@ -179,4 +275,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('save').addEventListener('click', saveSettings);
   document.getElementById('reset').addEventListener('click', resetSettings);
   document.getElementById('add-pricing').addEventListener('click', () => addPricingRow());
+  document.getElementById('add-tag').addEventListener('click', () => addTagRow());
 });

@@ -38,12 +38,19 @@
   let pricingTable = DEFAULT_PRICING;
   let overlay = null;
   let shadowRoot = null;
+  let tags = [];
+  let currentTag = null;
 
-  // Load settings
+  // Load settings and tags
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'getSettings' });
-    if (response?.ok) {
-      pricingTable = response.settings?.pricing || DEFAULT_PRICING;
+    const settingsResponse = await chrome.runtime.sendMessage({ type: 'getSettings' });
+    if (settingsResponse?.ok) {
+      pricingTable = settingsResponse.settings?.pricing || DEFAULT_PRICING;
+    }
+
+    const tagsResponse = await chrome.runtime.sendMessage({ type: 'getTags' });
+    if (tagsResponse?.ok) {
+      tags = tagsResponse.tags || [];
     }
   } catch (error) {
     // Extension context invalidated - exit silently
@@ -136,6 +143,43 @@
           padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
         }
         .reset-btn:hover { background: rgba(255,255,255,0.2); }
+        .tag-selector {
+          margin-bottom: 12px; position: relative;
+        }
+        .tag-label { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 6px; }
+        .tag-dropdown {
+          display: flex; align-items: center; justify-content: space-between;
+          background: rgba(255,255,255,0.08); padding: 8px 10px;
+          border-radius: 6px; cursor: pointer; position: relative;
+        }
+        .tag-dropdown:hover { background: rgba(255,255,255,0.12); }
+        .tag-current {
+          display: flex; align-items: center; gap: 6px; flex: 1;
+        }
+        .tag-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: var(--tag-color, #666);
+        }
+        .tag-name { font-size: 12px; color: #fff; }
+        .tag-arrow { font-size: 10px; color: rgba(255,255,255,0.5); }
+        .tag-menu {
+          position: absolute; top: 100%; left: 0; right: 0;
+          background: rgba(40, 40, 45, 0.98); border-radius: 6px;
+          margin-top: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+          max-height: 200px; overflow-y: auto; z-index: 10000;
+          display: none;
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .tag-menu.open { display: block; }
+        .tag-menu-item {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 12px; cursor: pointer;
+          transition: background 0.15s;
+        }
+        .tag-menu-item:hover { background: rgba(255,255,255,0.15); }
+        .tag-menu-item.selected { background: rgba(0, 212, 255, 0.25); }
+        .tag-menu-item:first-child { border-radius: 5px 5px 0 0; }
+        .tag-menu-item:last-child { border-radius: 0 0 5px 5px; }
         .kpi {
           display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
           margin-bottom: 12px;
@@ -162,6 +206,22 @@
           <div class="title">Revenium Meter</div>
           <button class="reset-btn js-reset">Reset</button>
         </div>
+        <div class="tag-selector">
+          <div class="tag-label">Tag this conversation</div>
+          <div class="tag-dropdown js-tag-dropdown">
+            <div class="tag-current">
+              <div class="tag-dot js-tag-dot" style="--tag-color: #666"></div>
+              <span class="tag-name js-tag-name">No tag</span>
+            </div>
+            <span class="tag-arrow">▼</span>
+          </div>
+          <div class="tag-menu js-tag-menu">
+            <div class="tag-menu-item js-tag-item" data-tag-id="">
+              <div class="tag-dot" style="--tag-color: #666"></div>
+              <span class="tag-name">No tag</span>
+            </div>
+          </div>
+        </div>
         <div class="kpi">
           <div class="kpi-item">
             <div class="kpi-label">Cost</div>
@@ -187,6 +247,111 @@
         // Silently handle errors
       }
     });
+
+    // Tag dropdown functionality
+    const dropdown = shadowRoot.querySelector('.js-tag-dropdown');
+    const menu = shadowRoot.querySelector('.js-tag-menu');
+
+    dropdown.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+
+    // Close menu when clicking outside (listen on shadow root)
+    shadowRoot.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && !menu.contains(e.target)) {
+        menu.classList.remove('open');
+      }
+    });
+
+    // Also close when clicking outside the panel
+    document.addEventListener('click', (e) => {
+      if (!overlay.contains(e.target)) {
+        menu.classList.remove('open');
+      }
+    });
+
+    // Populate tag menu
+    renderTagMenu();
+  }
+
+  function renderTagMenu() {
+    if (!shadowRoot) return;
+
+    const menu = shadowRoot.querySelector('.js-tag-menu');
+    menu.innerHTML = `
+      <div class="tag-menu-item js-tag-item" data-tag-id="">
+        <div class="tag-dot" style="--tag-color: #666"></div>
+        <span class="tag-name">No tag</span>
+      </div>
+    `;
+
+    tags.forEach(tag => {
+      const item = document.createElement('div');
+      item.className = `tag-menu-item js-tag-item${currentTag?.id === tag.id ? ' selected' : ''}`;
+      item.dataset.tagId = tag.id;
+      item.innerHTML = `
+        <div class="tag-dot" style="--tag-color: ${tag.color}"></div>
+        <span class="tag-name">${tag.name}</span>
+      `;
+      menu.appendChild(item);
+    });
+
+    // Add click handlers
+    menu.querySelectorAll('.js-tag-item').forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tagId = item.dataset.tagId || null;
+        await setTag(tagId);
+        menu.classList.remove('open');
+      });
+    });
+  }
+
+  function hexToRGBA(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  async function setTag(tagId) {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'setTag', tagId });
+      if (response?.ok) {
+        const tag = tags.find(t => t.id === tagId);
+        currentTag = tag || null;
+        updateTagDisplay();
+      }
+    } catch (error) {
+      console.error('[Revenium] Failed to set tag:', error);
+    }
+  }
+
+  function updateTagDisplay() {
+    if (!shadowRoot) return;
+
+    const dot = shadowRoot.querySelector('.js-tag-dot');
+    const name = shadowRoot.querySelector('.js-tag-name');
+
+    if (currentTag) {
+      dot.style.setProperty('--tag-color', currentTag.color);
+      name.textContent = currentTag.name;
+    } else {
+      dot.style.setProperty('--tag-color', '#666');
+      name.textContent = 'No tag';
+    }
+
+    // Update selected state in menu
+    shadowRoot.querySelectorAll('.js-tag-item').forEach(item => {
+      if (item.dataset.tagId === (currentTag?.id || '')) {
+        item.classList.add('selected');
+      } else {
+        item.classList.remove('selected');
+      }
+    });
   }
 
   function updateOverlay(data) {
@@ -208,6 +373,15 @@
     if (data.totals) {
       costEl.textContent = `$${data.totals.totalCostUSD.toFixed(4)}`;
       tokensEl.textContent = `${data.totals.totalTokens || 0}`;
+
+      // Update tag display if session has tag info
+      if (data.totals.tagId) {
+        const tag = tags.find(t => t.id === data.totals.tagId);
+        if (tag) {
+          currentTag = tag;
+          updateTagDisplay();
+        }
+      }
     }
 
     if (data.metrics) {

@@ -36,8 +36,124 @@
       color: rgba(255, 255, 255, 0.5);
     }
 
+    .tabs {
+      display: flex;
+      gap: 0;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px;
+      margin: 0 16px;
+      border-radius: 8px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.6);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: rgba(0, 212, 255, 0.2);
+      color: #00d4ff;
+    }
+
     .content {
       padding: 16px;
+    }
+
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .tag-badge .tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .report-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .report-item {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .report-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .tag-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .report-cost {
+      font-size: 14px;
+      font-weight: 700;
+      color: #00ff88;
+    }
+
+    .report-details {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
+    .report-stat {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .report-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .report-bar-fill {
+      height: 100%;
+      transition: width 0.3s ease;
     }
 
     .section {
@@ -194,6 +310,11 @@
   <div class="header">
     <h1>Revenium Meter</h1>
     <p class="subtitle">ChatGPT usage analytics</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="session">Session</button>
+    <button class="tab-btn" data-tab="reports">Reports</button>
   </div>
 
   <div class="content" id="content">

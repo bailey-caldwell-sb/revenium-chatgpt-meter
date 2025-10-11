@@ -14,6 +14,13 @@ const DEFAULT_PRICING = [
   { modelPrefix: "o1-mini", inputPerK: 0.003, outputPerK: 0.012, encoding: "o200k_base" }
 ];
 
+const DEFAULT_TAGS = [
+  { id: 'work', name: 'Work', color: '#00d4ff', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'personal', name: 'Personal', color: '#00ff88', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'research', name: 'Research', color: '#ff00ff', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } },
+  { id: 'acme', name: 'Acme Industries', color: '#ffa500', stats: { totalCost: 0, totalTokens: 0, messageCount: 0 } }
+];
+
 function round4(num) {
   return Math.round(num * 10000) / 10000;
 }
@@ -25,6 +32,7 @@ async function loadSettings() {
   const result = await chrome.storage.local.get('settings');
   settings = result.settings || {
     pricing: DEFAULT_PRICING,
+    tags: DEFAULT_TAGS,
     ui: {
       position: 'right',
       compact: false,
@@ -50,7 +58,10 @@ function ensureSession(tabId, metrics) {
       totalCompletionTokens: 0,
       totalCostUSD: 0,
       lastUpdatedAt: Date.now(),
-      perMessage: []
+      perMessage: [],
+      tagId: null,
+      tagName: null,
+      tagColor: null
     });
   }
   return state.get(tabId);
@@ -118,7 +129,7 @@ async function updateDailyHistory(session) {
   const key = `history:${today}`;
 
   const result = await chrome.storage.local.get(key);
-  const history = result[key] || { date: today, modelTotals: {} };
+  const history = result[key] || { date: today, modelTotals: {}, tagTotals: {} };
 
   const model = session.model || 'gpt-4';
   if (!history.modelTotals[model]) {
@@ -136,6 +147,23 @@ async function updateDailyHistory(session) {
   totals.costUSD += session.totalCostUSD;
   totals.messageCount += session.perMessage.length;
 
+  // Track by tag
+  const tagId = session.tagId || 'untagged';
+  if (!history.tagTotals[tagId]) {
+    history.tagTotals[tagId] = {
+      promptTokens: 0,
+      completionTokens: 0,
+      costUSD: 0,
+      messageCount: 0
+    };
+  }
+
+  const tagTotals = history.tagTotals[tagId];
+  tagTotals.promptTokens += session.totalPromptTokens;
+  tagTotals.completionTokens += session.totalCompletionTokens;
+  tagTotals.costUSD += session.totalCostUSD;
+  tagTotals.messageCount += session.perMessage.length;
+
   await chrome.storage.local.set({ [key]: history });
 }
 
@@ -151,8 +179,144 @@ function summarize(session) {
     totalTokens: session.totalPromptTokens + session.totalCompletionTokens,
     totalCostUSD: session.totalCostUSD,
     messageCount: session.perMessage.length,
-    lastUpdatedAt: session.lastUpdatedAt
+    lastUpdatedAt: session.lastUpdatedAt,
+    tagId: session.tagId,
+    tagName: session.tagName,
+    tagColor: session.tagColor
   };
+}
+
+/**
+ * Tag CRUD Operations
+ */
+function getAllTags() {
+  return settings?.tags || DEFAULT_TAGS;
+}
+
+function createTag(tag) {
+  if (!settings.tags) {
+    settings.tags = [...DEFAULT_TAGS];
+  }
+
+  const newTag = {
+    id: tag.id || crypto.randomUUID(),
+    name: tag.name,
+    color: tag.color,
+    stats: {
+      totalCost: 0,
+      totalTokens: 0,
+      messageCount: 0
+    }
+  };
+
+  settings.tags.push(newTag);
+  return newTag;
+}
+
+function updateTag(tagId, updates) {
+  const tagIndex = settings.tags.findIndex(t => t.id === tagId);
+  if (tagIndex === -1) {
+    throw new Error('Tag not found');
+  }
+
+  settings.tags[tagIndex] = {
+    ...settings.tags[tagIndex],
+    ...updates,
+    id: tagId, // Prevent ID changes
+    stats: settings.tags[tagIndex].stats // Preserve stats
+  };
+
+  return settings.tags[tagIndex];
+}
+
+function deleteTag(tagId) {
+  const tagIndex = settings.tags.findIndex(t => t.id === tagId);
+  if (tagIndex === -1) {
+    throw new Error('Tag not found');
+  }
+
+  settings.tags.splice(tagIndex, 1);
+  return true;
+}
+
+async function setSessionTag(tabId, tagId) {
+  const session = state.get(tabId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  const tag = settings.tags.find(t => t.id === tagId);
+  if (!tag && tagId !== null) {
+    throw new Error('Tag not found');
+  }
+
+  session.tagId = tagId;
+  session.tagName = tag?.name || null;
+  session.tagColor = tag?.color || null;
+
+  await persist(tabId, session);
+  return session;
+}
+
+async function getTagReport(startDate, endDate) {
+  const tags = getAllTags();
+  const report = {};
+
+  // Initialize report with all tags
+  tags.forEach(tag => {
+    report[tag.id] = {
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      totalCost: 0,
+      totalTokens: 0,
+      messageCount: 0,
+      dailyBreakdown: []
+    };
+  });
+
+  // Add untagged category
+  report['untagged'] = {
+    id: 'untagged',
+    name: 'Untagged',
+    color: '#666666',
+    totalCost: 0,
+    totalTokens: 0,
+    messageCount: 0,
+    dailyBreakdown: []
+  };
+
+  // Query daily history for date range
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const keys = [];
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    keys.push(`history:${dateStr}`);
+  }
+
+  const results = await chrome.storage.local.get(keys);
+
+  // Aggregate data
+  Object.values(results).forEach(dayHistory => {
+    if (!dayHistory.tagTotals) return;
+
+    Object.entries(dayHistory.tagTotals).forEach(([tagId, totals]) => {
+      if (report[tagId]) {
+        report[tagId].totalCost += totals.costUSD || 0;
+        report[tagId].totalTokens += (totals.promptTokens || 0) + (totals.completionTokens || 0);
+        report[tagId].messageCount += totals.messageCount || 0;
+        report[tagId].dailyBreakdown.push({
+          date: dayHistory.date,
+          cost: totals.costUSD || 0,
+          tokens: (totals.promptTokens || 0) + (totals.completionTokens || 0)
+        });
+      }
+    });
+  });
+
+  return Object.values(report);
 }
 
 /**
@@ -247,6 +411,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           settings = msg.settings;
           await chrome.storage.local.set({ settings });
           sendResponse({ ok: true });
+          break;
+        }
+
+        case 'getTags': {
+          const tags = getAllTags();
+          sendResponse({ ok: true, tags });
+          break;
+        }
+
+        case 'createTag': {
+          const newTag = createTag(msg.tag);
+          await chrome.storage.local.set({ settings });
+          sendResponse({ ok: true, tag: newTag });
+          break;
+        }
+
+        case 'updateTag': {
+          const updatedTag = updateTag(msg.tagId, msg.updates);
+          await chrome.storage.local.set({ settings });
+          sendResponse({ ok: true, tag: updatedTag });
+          break;
+        }
+
+        case 'deleteTag': {
+          deleteTag(msg.tagId);
+          await chrome.storage.local.set({ settings });
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case 'setTag': {
+          if (!tabId) {
+            sendResponse({ ok: false, error: 'No tab ID' });
+            return;
+          }
+
+          const session = await setSessionTag(tabId, msg.tagId);
+          sendResponse({ ok: true, totals: summarize(session) });
+          break;
+        }
+
+        case 'getTagReport': {
+          const report = await getTagReport(msg.startDate, msg.endDate);
+          sendResponse({ ok: true, report });
           break;
         }
 

@@ -153,6 +153,41 @@
       background: rgba(255, 68, 68, 0.3);
     }
 
+    .tag-preview {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .tag-preview-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    input[type="color"] {
+      width: 60px;
+      height: 36px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px;
+    }
+
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 4px;
+    }
+
     .status {
       padding: 12px;
       border-radius: 8px;
@@ -227,6 +262,25 @@
         <input type="checkbox" id="redact-text">
         <label for="redact-text">Redact user text (store only metadata)</label>
       </div>
+    </div>
+
+    <div class="section">
+      <h2>Tag Management</h2>
+      <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 16px;">Create and manage tags for categorizing conversations</p>
+      <table id="tags-table">
+        <thead>
+          <tr>
+            <th>Tag Name</th>
+            <th>Color</th>
+            <th>Preview</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tags-body">
+          <!-- Rows added dynamically -->
+        </tbody>
+      </table>
+      <button class="add-row-btn" id="add-tag">+ Add Tag</button>
     </div>
 
     <div class="button-group">
