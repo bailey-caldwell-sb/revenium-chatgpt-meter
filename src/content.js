@@ -511,6 +511,11 @@
       multimodalEl.style.display = 'none';
       imagesEl.style.display = 'none';
       reasoningEl.style.display = 'none';
+
+      // Reset tag to null
+      currentTag = null;
+      updateTagDisplay();
+
       return;
     }
 
@@ -600,5 +605,25 @@
   }).observe(document, { subtree: true, childList: true });
 
   createOverlay();
+
+  // Load current session tag if exists
+  async function loadCurrentSessionTag() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'getSession' });
+      if (response?.ok && response.totals?.tagId) {
+        const tag = tags.find(t => t.id === response.totals.tagId);
+        if (tag) {
+          currentTag = tag;
+          updateTagDisplay();
+        }
+      }
+    } catch (error) {
+      // Silently handle errors
+    }
+  }
+
+  // Wait for overlay to be created, then load session tag
+  setTimeout(loadCurrentSessionTag, 500);
+
   console.log('[Revenium] Content script initialized');
 })();

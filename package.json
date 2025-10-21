@@ -5,7 +5,7 @@
   "main": "src/meter-core.js",
   "scripts": {
     "build:tiktoken": "npm run copy:tiktoken:wasm && npm run bundle:tiktoken",
-    "bundle:tiktoken": "esbuild node_modules/@dqbd/tiktoken/dist/tiktoken.js --bundle --outfile=src/vendor/tiktoken.min.js --format=esm",
+    "bundle:tiktoken": "esbuild ./node_modules/@dqbd/tiktoken/lite/init.js --bundle --outfile=src/vendor/tiktoken.min.js --format=esm --external:fs --external:path",
     "copy:tiktoken:wasm": "cp node_modules/@dqbd/tiktoken/tiktoken_bg.wasm src/vendor/",
     "clean": "rm -rf src/vendor/tiktoken*.{js,wasm}",
     "package": "zip -r revenium-chatgpt-meter.zip . -x 'node_modules/*' '*.git/*' 'package*.json' '.DS_Store'",

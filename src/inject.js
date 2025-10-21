@@ -10,12 +10,77 @@
   }
   window.__REVENIUM_INJECTED__ = true;
 
+  // Tiktoken tokenizer state
+  let tiktokenReady = false;
+  let tiktokenEncoders = {};
 
-  // Simple tokenizer (4:1 approximation)
-  function encodeForModel(text) {
+  // Initialize tiktoken
+  async function initTiktoken() {
+    if (tiktokenReady) return true;
+
+    try {
+      // Import tiktoken module
+      const tiktokenModule = await import(chrome.runtime.getURL('src/vendor/tiktoken.min.js'));
+
+      // Load WASM
+      const wasmUrl = chrome.runtime.getURL('src/vendor/tiktoken_bg.wasm');
+      await tiktokenModule.init((imports) => WebAssembly.instantiateStreaming(fetch(wasmUrl), imports));
+
+      // Get encoders from the module
+      const { get_encoding } = tiktokenModule;
+
+      // Initialize encodings we need
+      tiktokenEncoders.cl100k_base = get_encoding('cl100k_base');
+      tiktokenEncoders.o200k_base = get_encoding('o200k_base');
+
+      tiktokenReady = true;
+      console.log('[Revenium] Tiktoken initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('[Revenium] Failed to initialize tiktoken:', error);
+      return false;
+    }
+  }
+
+  // Get encoding for model
+  function getEncodingForModel(model) {
+    if (!model) return 'cl100k_base';
+    const modelLower = model.toLowerCase();
+
+    // O1 series uses o200k_base
+    if (modelLower.includes('o1') || modelLower.includes('o3')) {
+      return 'o200k_base';
+    }
+
+    // GPT-4, GPT-3.5 use cl100k_base
+    return 'cl100k_base';
+  }
+
+  // Tokenize text with tiktoken (with fallback)
+  function encodeForModel(text, model) {
     if (!text) return [];
+
+    // Try tiktoken if ready
+    if (tiktokenReady) {
+      try {
+        const encodingName = getEncodingForModel(model);
+        const encoder = tiktokenEncoders[encodingName];
+        if (encoder) {
+          return encoder.encode(text);
+        }
+      } catch (error) {
+        console.warn('[Revenium] Tiktoken encoding failed, using fallback:', error);
+      }
+    }
+
+    // Fallback: 4:1 approximation
     return new Array(Math.ceil(text.length / 4)).fill(0);
   }
+
+  // Start tiktoken initialization (async, non-blocking)
+  initTiktoken().catch(err => {
+    console.warn('[Revenium] Tiktoken initialization failed, using fallback tokenizer:', err);
+  });
 
   // Detect if model is a reasoning model (o1, o3 series)
   function isReasoningModel(model) {
@@ -216,7 +281,7 @@
 
         const model = reqBody?.model || 'gpt-4';
         const inputText = serializeMessages(reqBody?.messages || []);
-        const inputTokens = encodeForModel(inputText).length;
+        const inputTokens = encodeForModel(inputText, model).length;
 
         // Count multimodal content
         const imageInputCount = countImages(reqBody?.messages || []);
@@ -236,7 +301,7 @@
 
             if (done) {
               const tDone = Date.now();
-              const outputTokens = encodeForModel(assistantText).length;
+              const outputTokens = encodeForModel(assistantText, model).length;
 
               // Estimate reasoning tokens for o1/o3 models
               const estimatedReasoningTokens = hasReasoningModel
@@ -316,7 +381,7 @@
                   assistantText += delta;
 
                   // Send partial update
-                  const partialOutputTokens = encodeForModel(assistantText).length;
+                  const partialOutputTokens = encodeForModel(assistantText, model).length;
                   const partialTotalTokens = inputTokens + partialOutputTokens;
 
                   window.dispatchEvent(new CustomEvent('revenium-partial', {
