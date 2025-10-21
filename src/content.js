@@ -565,10 +565,16 @@
       }
 
       // Update tag display if session has tag info
-      if (data.totals.tagId) {
-        const tag = tags.find(t => t.id === data.totals.tagId);
-        if (tag) {
-          currentTag = tag;
+      if (data.totals.tagId !== undefined) {
+        if (data.totals.tagId) {
+          const tag = tags.find(t => t.id === data.totals.tagId);
+          if (tag) {
+            currentTag = tag;
+            updateTagDisplay();
+          }
+        } else {
+          // Tag was explicitly cleared
+          currentTag = null;
           updateTagDisplay();
         }
       }
@@ -623,7 +629,10 @@
   }
 
   // Wait for overlay to be created, then load session tag
+  // Try multiple times with increasing delays to handle session restoration
   setTimeout(loadCurrentSessionTag, 500);
+  setTimeout(loadCurrentSessionTag, 1500);
+  setTimeout(loadCurrentSessionTag, 3000);
 
   console.log('[Revenium] Content script initialized');
 })();

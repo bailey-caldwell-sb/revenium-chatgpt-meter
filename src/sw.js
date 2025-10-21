@@ -112,15 +112,14 @@ function ensureSession(tabId, metrics) {
 
 /**
  * Update session with finalized metrics
- * Note: Each API call includes the FULL conversation history in the input
- * So we track the cumulative total by:
- * - Using the latest input tokens (which includes full history)
- * - Accumulating output tokens (each response adds to total)
- * - Accumulating multimodal content (images, reasoning tokens)
+ * Note: We accumulate tokens across all message exchanges in the conversation
+ * - Input tokens = accumulate all user prompts
+ * - Output tokens = accumulate all assistant responses
+ * - Multimodal content = accumulate images and reasoning tokens
  */
 function updateSessionWithFinal(session, metrics) {
-  // Input tokens = full conversation history (replace with latest)
-  session.totalPromptTokens = metrics.promptTokens || 0;
+  // Input tokens = accumulate all user prompts
+  session.totalPromptTokens += metrics.promptTokens || 0;
 
   // Output tokens = accumulate all assistant responses
   session.totalCompletionTokens += metrics.completionTokens || 0;
@@ -132,15 +131,14 @@ function updateSessionWithFinal(session, metrics) {
   session.totalImageInputs += metrics.imageInputCount || 0;
   session.totalImageOutputs += metrics.imageOutputCount || 0;
 
-  // Calculate cost breakdown
+  // Calculate cost breakdown - accumulate all costs
   const textInputCost = metrics.inputCostUSD || 0;
   const textOutputCost = metrics.outputCostUSD || 0;
   const imageCost = metrics.imageCostUSD || 0;
   const reasoningCost = metrics.reasoningCostUSD || 0;
 
-  // Total cost = latest input cost + cumulative output/image/reasoning costs
-  const cumulativeOutputCost = (session.textCostUSD || 0) - (session.lastInputCostUSD || 0);
-  session.textCostUSD = textInputCost + cumulativeOutputCost + textOutputCost;
+  // Accumulate all costs
+  session.textCostUSD = (session.textCostUSD || 0) + textInputCost + textOutputCost;
   session.imageCostUSD = (session.imageCostUSD || 0) + imageCost;
   session.reasoningCostUSD = (session.reasoningCostUSD || 0) + reasoningCost;
 
@@ -150,8 +148,6 @@ function updateSessionWithFinal(session, metrics) {
   session.imageCostUSD = round6(session.imageCostUSD);
   session.reasoningCostUSD = round6(session.reasoningCostUSD);
 
-  // Track last input cost for next calculation
-  session.lastInputCostUSD = textInputCost;
   session.lastUpdatedAt = Date.now();
 
   // Update conversation ID if available
@@ -460,7 +456,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return;
           }
 
-          const session = state.get(tabId);
+          // Check in-memory session first
+          let session = state.get(tabId);
+
+          // If not in memory, try to restore from storage
+          if (!session) {
+            try {
+              const key = `session:${tabId}`;
+              const result = await chrome.storage.local.get(key);
+              if (result[key]) {
+                session = result[key];
+                state.set(tabId, session); // Restore to memory
+              }
+            } catch (error) {
+              console.error('[Revenium SW] Failed to restore session from storage:', error);
+            }
+          }
+
           if (session) {
             sendResponse({
               ok: true,
